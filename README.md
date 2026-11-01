@@ -1,73 +1,108 @@
 # Project Mode for DeepSeek Harness
 
-A persistent Coordinator, continuable Workers, and shared project memory built on native DSH sessions.
+Give a project a persistent Coordinator that manages Workers, maintains project knowledge and decides how to move the work forward.
 
-[中文说明](README.zh.md) · [MOA architecture](docs/moa-architecture.md) · [Code architecture](docs/architecture.md) · [Tool API](docs/tool-api.md) · [Compatibility](docs/compatibility.md)
+[中文](README.zh.md) · [MOA model](docs/moa-architecture.md) · [Code architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
 
-**Developer preview, v0.1.21.** This release targets **DSH 0.2.1-rc.3 with the three explicit compatibility extensions in this repository**. Stock rc.3 cannot enable the plugin. There is no automatic application patching or npm publication.
+**Developer preview: v0.1.21.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. Stock rc.3 cannot enable the plugin. Read [Compatibility](docs/compatibility.md) before installing.
 
-## How it works
+## What Project Mode does
 
-The Coordinator takes over the context management and coordination decisions a person would otherwise perform: choose an existing Worker or create one, supply context, guide current work, queue later work, review results and decide what happens next. Workers are persistent conversations that users can also operate directly.
+Working with several Agents usually means someone has to choose who does what, carry context between conversations, follow up on progress and reconcile the results. Project Mode gives that continuing responsibility to a Coordinator in the project's main conversation.
+
+The Coordinator manages persistent Worker conversations through `control_workers`. It can create or reuse a Worker, guide current work, queue a later instruction, inspect its conversation, interrupt it or remove it from the project. It reviews results and decides whether to continue, reassign or conclude.
+
+Execution uses native DSH Sessions, Agent Loop, tools, permissions and message delivery. Project Mode adds project coordination and a small set of interface extensions.
+
+## People, Coordinator and Workers
+
+| Role | Responsibility |
+| --- | --- |
+| You | Set goals, make decisions and talk to the Coordinator. You can also open a Worker and guide it directly. |
+| Coordinator | Choose and guide Workers, supply context, review results, maintain work records, organize shared knowledge and report progress. It can handle clarification, synthesis and small self-contained actions itself. |
+| Worker | Carry an assigned investigation or execution through to a result, contribute reusable findings and return a self-contained final AI message. |
+
+A usual workflow:
+
+1. You bring a goal to the Coordinator. It checks Workers and relevant project memory, including direct user activity in child conversations.
+2. It chooses an existing Worker or creates one, supplies the goal and context, then updates `notes.md`.
+3. As work changes, it uses **steer** to guide the current work or **queue** to leave an instruction for after the current turn. Interrupt and delete remain separate actions.
+4. Each Worker turn automatically returns its complete last committed AI message. A turn without an AI message still reports its identity and outcome with an empty AI result.
+5. The Coordinator reviews the result, follows up or concludes, and updates work records and reusable context. Normal closure waits for relevant work and result consumption within the same native Coordinator turn.
+
+When you operate a Worker directly, the Coordinator can inspect its current state and read the conversation as needed when you return.
+
+## Project memory
 
 ```text
 .dsh/project-mode/<project-id>/
-├── notes.md                 Coordinator: todos, assignments, progress, blockers
-├── archived.md              Coordinator: concluded work and results
+├── notes.md                 Todos, assignments, progress, blockers, next steps
+├── archived.md              Concluded work and its results
 └── context/
     ├── context.md           Shared index: file paths and short descriptions
-    └── ...                  Reusable facts, decisions and project knowledge
+    ├── decisions.md         Reusable decisions and their reasons, created as needed
+    └── ...                  Other reusable project knowledge
 ```
 
-Both roles read the context index first and load relevant files on demand. Workers contribute valuable reusable findings; the Coordinator primarily organizes, consolidates and prunes that knowledge. Routine progress belongs in the work records.
+The Coordinator maintains `notes.md` and `archived.md` so it knows where the project stands and what needs attention.
 
-At a new user message, the Coordinator checks the Worker list, including direct user activity. It chooses reuse or spawn, dispatches a complete goal and updates notes. During work it distinguishes **steer** (guide current work), **queue** (after the current turn), **interrupt** and **delete**. Each ended Worker turn automatically returns its full last committed AI message. An empty AI result still reports completion, allowing the Coordinator to inspect history and recover.
+Both the Coordinator and Workers maintain context. They read `context/context.md` first, then open the files needed for the current task. Workers contribute valuable reusable findings and update the index. The Coordinator primarily organizes, consolidates and prunes that knowledge. Routine progress stays in the work records.
 
-## Native behavior and interface
+These documents persist with the project; they are loaded progressively rather than copied into every request. [The MOA model](docs/moa-architecture.md) describes these responsibilities in more detail.
 
-- `control_workers` replaces native delegation/control tools in the Coordinator's Agent scope. Workers and ordinary sessions retain native tools.
-- Normal Coordinator closure waits for relevant Worker results to be delivered and consumed in the same native turn. Native Stop remains abortable and does not automatically stop Workers.
-- A capsule appears once at the bottom of each participating human-message segment: spawn, accepted update or received result creates participation. Old capsules stay in their original segment; a passive user reply does not move or copy them. Deleting a Worker hides its capsules and removes it from active Project queries.
-- The original workspace sidebar renders expandable Worker rows, stable icons and native status indicators. Worker titles align with their Coordinator.
-- Right-side native tabs open by default: **Workers**, with a newest-first work timeline, and **notes.md**. Input and final AI output render as original Markdown behind collapsed headings. Tabs remain closable.
-- Project identity is permanent after its first turn starts. Worker composers show a transparent **Back** control and no independent permission picker; delegation permissions use DSH's native inheritance.
-- Archiving a Project brings its managed Workers along; restoring preserves previously independent archives.
+## In DSH
 
-Delegation is a role judgment, not a task-keyword router or a command/time gate. Natural model behavior can still choose direct execution; this preview does not guarantee perfect delegation decisions.
+- Select **Project** for a new conversation before its first message. Its Project identity stays fixed after the first turn starts.
+- Expand the Coordinator in the original workspace sidebar to open its Workers. Each has a stable identity icon and current status.
+- Click a Worker capsule in the main conversation to open that child. Capsules stay with the conversation segment where work was dispatched, updated or received; later passive replies do not move them.
+- Use the default **Workers** and **notes.md** tabs on the right. Workers shows a newest-first timeline of original input, final AI output and recorded artifacts. Input/output are collapsed until opened. Both tabs are closable.
+- Worker composers provide **Back** to the Coordinator and use native delegated permissions without an independent permission picker. Archiving the Project brings its managed Workers along.
+
+Coordinator delegation/control tools are replaced only in that Agent's scope. Workers and ordinary conversations retain native composition. Native Stop remains available and does not automatically stop every Worker.
+
+## Installation
+
+Prepare the DSH runtime you intend to use according to [Compatibility](docs/compatibility.md), then install the tagged bundle through that runtime's CLI:
+
+```sh
+dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.21"
+```
+
+You can also install `dsh-plugin-project-mode-0.1.21-npm.tgz` from [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases/tag/v0.1.21).
+
+Enable the plugin in DSH's Plugins page, open a workspace, create a conversation and select **Project** before sending the first message.
+
+The repository includes built artifacts for Git installation. There is no automatic application patching or npm publication. Patching this checkout's development dependencies does not patch your installed DSH application; a packaged Desktop needs a separately prepared compatible runtime. The compatibility guide documents the explicit helper, exact-version checks and backup/restore requirements.
 
 ## Development
 
 Requires Node **24.9+**, npm and Git.
 
 ```sh
+git clone https://github.com/Burns1028/dsh-plugin-project-mode.git
+cd dsh-plugin-project-mode
 npm ci
 node scripts/apply-native-compat.mjs --dry-run
 node scripts/apply-native-compat.mjs --backup "$PWD/.superpowers/native-backup"
-npm test -- --maxWorkers=4
-npm run typecheck
-npm run test:native-contract
-node scripts/prepare-release.mjs
-npm run verify:package
+npm test -- --maxWorkers=1
 ```
 
-The helper verifies exact rc.3 versions and SHA-256 hashes before writing. It backs up the selected native files and rolls back failed patch application. No install or prepare hook changes another runtime. See [compatibility](docs/compatibility.md) before targeting a separate DSH installation.
+`npm test` builds the plugin first. Edit `packages/project-mode/src`; regenerate the committed `lib` artifacts through the build. See [Contributing](CONTRIBUTING.md) for typechecks, native contracts, package consumer verification and the test map.
 
-## Installation
+| Read this | To understand |
+| --- | --- |
+| [MOA model](docs/moa-architecture.md) | Role responsibilities and progressive shared context |
+| [Code architecture](docs/architecture.md) | Modules, functions, data structures and execution paths |
+| [Tool API](docs/tool-api.md) | Worker control, message delivery and history windows |
+| [Compatibility](docs/compatibility.md) | The explicit rc.3 runtime extensions |
+| [Verification](docs/verification.md) / [Manual checks](docs/manual-verification.md) | What was tested and how to check a real application |
 
-First prepare the DSH runtime you intend to use with the documented compatibility extensions. The development commands above patch only this checkout's `node_modules`; they do not prepare your installed DSH application. Then install the Git tag through the compatible runtime's CLI:
+## Current limits
 
-```sh
-dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.21"
-```
+Delegation remains a model judgment. This preview does not guarantee ideal task ownership on every request, and does not use task keywords or command/time thresholds to force it.
 
-Alternatively, install the `dsh-plugin-project-mode-0.1.21-npm.tgz` asset from [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases). The Git root forwards to the nested Cordis bundle and includes built artifacts; no build hook is required at installation. A packaged Desktop application needs a separately prepared compatible runtime; this project does not offer a one-click Desktop patch installer.
+Known issues include error isolation and Worker-list consistency. They are documented under [maintenance debt](docs/architecture.md#current-maintenance-debt), with the [verification record](docs/verification.md) distinguishing confirmed issues from passing release checks.
 
-For module responsibilities, key structures, execution paths and the test map, read [Code architecture](docs/architecture.md) and [Contributing](CONTRIBUTING.md).
+## License
 
-## Verification and limits
-
-[Verification](docs/verification.md) distinguishes native integration tests, package consumer checks and a real Desktop model task. [Manual verification](docs/manual-verification.md) covers turn closure, delivery, capsule ownership, tools, recovery and UI checks.
-
-This is a local-first DSH extension, not a second Agent loop. Permissions, approvals, persistence, queueing and execution remain DSH-owned. Private conversations, credentials, screenshots and private development history are excluded from this public snapshot.
-
-MIT. See [third-party notices](THIRD_PARTY_NOTICES.md).
+MIT. See [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md).
