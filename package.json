@@ -113,7 +113,17 @@
     "node": ">=24.9.0"
   },
   "version": "0.1.22",
-  "description": "Native Project coordination with continuable workers for DeepSeek Harness.",
+  "description": "Unofficial Project Mode for DeepSeek Harness: persistent Coordinator, reusable Workers and shared context. Preview; requires patched DSH 0.2.1-rc.3.",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh-plugin",
+    "multi-agent",
+    "ai-agents",
+    "agent-orchestration",
+    "project-management",
+    "typescript"
+  ],
   "license": "MIT",
   "main": "./packages/project-mode/lib/index.js",
   "types": "./packages/project-mode/lib/types/host/index.d.ts",

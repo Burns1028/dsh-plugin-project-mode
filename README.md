@@ -10,7 +10,7 @@ English | [简体中文](README.zh.md)
 
 [Watch the 22-second walkthrough](docs/media/project-mode-demo.mp4) · [Explore the screenshots](#see-it-in-action) · [Install](#quick-start)
 
-**Developer preview: v0.1.22.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. Stock rc.3 cannot enable the plugin. Read [Compatibility](docs/compatibility.md) before installing.
+**Unofficial developer preview: v0.1.22.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. Stock rc.3 cannot enable the plugin. Read [Compatibility](docs/compatibility.md) before installing.
 
 ## Contents
 
@@ -169,6 +169,8 @@ The Coordinator uses `control_workers` with `spawn`, `list`, `get`, `send`, `his
 ## Current limits
 
 Delegation remains a model judgment. This preview does not guarantee ideal task ownership on every request, and does not use task keywords or command/time thresholds to force it.
+
+Try Project Mode on a small project and share your workflow or installation feedback in [Issues](https://github.com/Burns1028/dsh-plugin-project-mode/issues). If you would like to follow its development, a star helps others discover it.
 
 ## License
 

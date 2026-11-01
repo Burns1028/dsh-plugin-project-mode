@@ -10,7 +10,7 @@
 
 [观看 22 秒操作演示](docs/media/project-mode-demo.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
 
-**开发预览版：v0.1.22。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，原版 rc.3 无法启用插件。安装前请先阅读[兼容说明](docs/compatibility.md)。
+**非官方开发预览版：v0.1.22。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，原版 rc.3 无法启用插件。安装前请先阅读[兼容说明](docs/compatibility.md)。
 
 ## 目录
 
@@ -169,6 +169,8 @@ Coordinator 通过 `control_workers` 使用 `spawn`、`list`、`get`、`send`、
 ## 当前限制
 
 分工仍由模型判断，预览版不保证每次都作出理想选择，也不使用任务关键词、命令次数或时间阈值强迫派发。
+
+欢迎用一个小项目试用，并在 [Issues](https://github.com/Burns1028/dsh-plugin-project-mode/issues) 分享使用场景或安装反馈。如果希望持续关注项目，点一个 Star 也能帮助更多人发现它。
 
 ## 许可证
 
