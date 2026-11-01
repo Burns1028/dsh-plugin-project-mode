@@ -1,0 +1,3 @@
+- insert:
+    - id: project-mode
+      name: dsh-plugin-project-mode

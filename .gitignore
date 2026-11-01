@@ -1,0 +1,16 @@
+node_modules/
+coverage/
+.superpowers/
+*.tgz
+.DS_Store
+packages/*/lib/
+packages/_build-*/
+*.tsbuildinfo
+
+dist/
+# Release preparation creates tarball documentation copies.
+packages/project-mode/README*.md
+packages/project-mode/LICENSE
+packages/project-mode/THIRD_PARTY_NOTICES.md
+packages/project-mode/CHANGELOG.md
+packages/project-mode/docs/

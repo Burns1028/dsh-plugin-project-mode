@@ -1,0 +1,354 @@
+// @vitest-environment jsdom
+import * as React from "react";
+import {
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+  act,
+} from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { Context } from "@deepseek-ai/cordis";
+import { createSnapshotStore } from "@deepseek-ai/dsh-client-store";
+import type * as Renderer from "@deepseek-ai/dsh-client-ui-renderer/client";
+import type * as Conversation from "@deepseek-ai/dsh-client-ui-conversation/client";
+import {
+  apply,
+  inject,
+} from "../../packages/project-mode/src/client/index.tsx";
+import { nativeLoader } from "./native-loader.ts";
+import { submissionFixture } from "./submission-fixture.ts";
+import { snapshot, sid } from "./fixture.ts";
+import { en } from "../../packages/project-mode/src/client/locales.ts";
+
+const dispose: (() => unknown)[] = [];
+afterEach(async () => {
+  cleanup();
+  for (const off of dispose.splice(0).reverse()) await off();
+  localStorage.clear();
+  delete (window as any).__ModuleLoader__;
+});
+async function bench() {
+  const load = nativeLoader(),
+    root = new Context();
+  dispose.push(() => root.fiber.dispose());
+  const renderer = load<typeof Renderer>("@deepseek-ai/dsh-client-ui-renderer"),
+    conversation = load<typeof Conversation>(
+      "@deepseek-ai/dsh-client-ui-conversation",
+    );
+  const slots = new renderer.SlotRegistry(root);
+  new conversation.UiConversation(root, {} as any);
+  submissionFixture(root);
+  slots.register(
+    {
+      name: "root",
+      children: {
+        "conversation.input.left": { kind: "list", scope: "session" },
+        "conversation.chat.node": { kind: "keyed", scope: "session" },
+        "conversation.composer": { kind: "chain", scope: "session" },
+        "conversation.session.header.actions": {
+          kind: "list",
+          scope: "session",
+        },
+        "conversation.session.header.views.actions": {
+          kind: "list",
+          scope: "root",
+        },
+        "sidebar.right.pane.tab": { kind: "keyed", scope: "session" },
+      },
+    } as any,
+    (() => null) as any,
+  );
+  const mounted = createSnapshotStore(sid("parent")),
+    tabs: any[] = [],
+    types = new Map();
+  const sidebar = {
+    mounted,
+    tabsIn: () => tabs,
+    active: () => tabs[0],
+    focus: vi.fn(),
+    openTabIn: vi.fn((_id, kind) => tabs.push({ id: "workers-tab", kind })),
+    openResourceIn: vi.fn((_id, address) =>
+      tabs.push({ id: "notes-tab", kind: "text", contentId: address }),
+    ),
+  };
+  root.provide("sidebarRight", sidebar as any);
+  root.provide("sidebarRightTabs", {
+    subscribe: () => () => {},
+    entries: () => [...types.values()],
+    claim: () => ({ kind: "text" }),
+    register: (definition: any) => {
+      types.set(definition.kind, definition);
+      return () => types.delete(definition.kind);
+    },
+  } as any);
+  const streamSignals: AbortSignal[] = [],
+    streamDisposals = vi.fn();
+  const remote = {
+    catalog: async () => ({ ok: true, value: [snapshot()] }),
+    timeline: vi.fn((_parent, workerId, limit, signal) => {
+      streamSignals.push(signal);
+      return {
+        dispose: streamDisposals,
+        async *[Symbol.asyncIterator]() {
+          yield {
+            workerId,
+            total: 11,
+            hasMore: limit < 11,
+            turns: [
+              {
+                turn: 2,
+                startedAt: 1700000000000,
+                finishedAt: 1700000001000,
+                outcome: "completed",
+                inputs: [
+                  {
+                    id: "in",
+                    time: 1700000000000,
+                    text: `## Input ${workerId}\n\n- **Keep** this input as written.`,
+                    actor: "user",
+                  },
+                ],
+                outputs: [
+                  {
+                    id: "out",
+                    time: 1700000001000,
+                    text: `Output ${workerId}`,
+                  },
+                ],
+                artifacts: [
+                  { path: "report.md", kind: "changed", time: 1700000001000 },
+                ],
+              },
+            ],
+          };
+          await new Promise<void>((resolve) =>
+            signal.addEventListener("abort", () => resolve(), { once: true }),
+          );
+        },
+      };
+    }),
+  };
+  root.provide("remote", {
+    $mount: async () => () => {},
+    projectMode: remote,
+  } as any);
+  root.provide("remote.projectMode", remote);
+  root.provide("sessions", {
+    list: createSnapshotStore({ ids: [], byId: {} }),
+  } as any);
+  root.provide("uiWorkspace", { openSession: vi.fn() } as any);
+  root.provide("workspaces", {} as any);
+  root.provide("locale", { register: () => () => {}, bind: () => t } as any);
+  const fiber = root.plugin({ inject, apply });
+  await fiber;
+  const client = (slots.entries("conversation.input.left")[0].inject?.() as any)
+    .client;
+  await vi.waitFor(() =>
+    expect(client.store.project(sid("parent"))).toBeDefined(),
+  );
+  return {
+    root,
+    fiber,
+    slots,
+    client,
+    sidebar,
+    types,
+    remote,
+    streamSignals,
+    streamDisposals,
+  };
+}
+const t = (key: keyof typeof en, args?: Record<string, any>) =>
+  String(en[key] ?? key).replace(/\{(\w+)\}/g, (_, key) =>
+    String(args?.[key] ?? key),
+  );
+
+it("registers a native Workers tab and defaults once to Workers and the native notes preview without reopening closed tabs", async () => {
+  const b = await bench();
+  expect(b.types.has("project-mode-workers")).toBe(true);
+  const entry = b.slots
+    .entries("conversation.session.header.actions")
+    .find((e: any) => e.options.id === "project-mode.panels")!;
+  const props = {
+    ...entry.inject?.(),
+    sessionId: sid("parent"),
+    useSession: (select: any) => select({ openState: "open" }),
+  };
+  const Component = entry.component as any;
+  const ui = render(<Component {...props} />);
+  await vi.waitFor(() => expect(b.sidebar.openTabIn).toHaveBeenCalledTimes(1));
+  expect(b.sidebar.openResourceIn).toHaveBeenCalledExactlyOnceWith(
+    sid("parent"),
+    expect.stringContaining("/parent/notes"),
+  );
+  b.sidebar.tabsIn().splice(0);
+  ui.unmount();
+  render(<Component {...props} />);
+  expect(b.sidebar.openTabIn).toHaveBeenCalledTimes(1);
+  await b.fiber.dispose();
+  expect(b.types.size).toBe(0);
+});
+
+it("selects workers inside one native tab, renders per-turn inputs/outputs/artifacts, loads older turns and releases streams", async () => {
+  const b = await bench();
+  const entry = b.slots
+    .entries("sidebar.right.pane.tab")
+    .find((e: any) => e.options.key === "project-mode-workers");
+  expect(entry).toBeDefined();
+  b.client.store.accept({
+    ...snapshot(),
+    revision: 2,
+    workers: [
+      ...snapshot().workers,
+      {
+        ...snapshot().workers[0],
+        workerId: sid("child-two"),
+        name: "Reviewer",
+      },
+    ],
+  });
+  const openResource = vi.fn(),
+    signal = new AbortController().signal;
+  const Component = entry!.component as any;
+  const ui = render(
+    <Component
+      {...entry!.inject?.()}
+      sessionId={sid("parent")}
+      t={t}
+      useTabInfo={() => ({
+        tab: { visible: true, signal, actions: { openResource } },
+      })}
+    />,
+  );
+  await screen.findByText("Output child");
+  const input = screen.getByText("Input child").closest("details")!;
+  const output = screen.getByText("Output child").closest("details")!;
+  expect(input).not.toBeNull();
+  expect(output).not.toBeNull();
+  expect(input.open).toBe(false);
+  expect(output.open).toBe(false);
+  fireEvent.click(input.querySelector("summary")!);
+  expect(input.open).toBe(true);
+  expect(screen.getByRole("heading", { name: "Input child" })).toBeTruthy();
+  fireEvent.click(output.querySelector("summary")!);
+  expect(output.open).toBe(true);
+  expect(screen.getByText("Keep").tagName).toBe("STRONG");
+  expect(screen.getByText("report.md")).toBeTruthy();
+  fireEvent.click(screen.getByText("report.md"));
+  expect(openResource).toHaveBeenCalledWith(
+    expect.stringContaining("/child/report.md"),
+  );
+  const axis = ui.container.querySelector(".pm-worker-axis")!;
+  axis.scrollTop = 500;
+  fireEvent.click(screen.getByRole("button", { name: /Reviewer/ }));
+  await screen.findByText("Output child-two");
+  expect(axis.scrollTop).toBe(0);
+  expect(b.streamSignals[0].aborted).toBe(true);
+  expect(screen.queryByText("Output child")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Load earlier/ }));
+  await vi.waitFor(() =>
+    expect(b.remote.timeline).toHaveBeenLastCalledWith(
+      sid("parent"),
+      sid("child-two"),
+      20,
+      expect.any(AbortSignal),
+    ),
+  );
+  ui.unmount();
+  expect(b.streamSignals.every((signal) => signal.aborted)).toBe(true);
+  expect(b.streamDisposals).toHaveBeenCalled();
+});
+
+it("offers explicit reopen actions only while a Project is selected", async () => {
+  const b = await bench();
+  const entry = b.slots
+    .entries("conversation.session.header.views.actions")
+    .find((e: any) => e.options.id === "project-mode.open-panels");
+  expect(entry).toBeDefined();
+  const Component = entry!.component as any;
+  render(<Component t={t} onDismiss={vi.fn()} />);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Workers" }));
+  expect(b.sidebar.openTabIn).toHaveBeenCalledWith(
+    sid("parent"),
+    "project-mode-workers",
+  );
+  act(() => b.sidebar.mounted.set(sid("ordinary")));
+  expect(screen.queryByRole("menuitem", { name: "Workers" })).toBeNull();
+});
+
+it("omits removed and uncreated workers, switches away from a deleted selection and clears the final removed timeline", async () => {
+  const b = await bench();
+  const entry = b.slots
+    .entries("sidebar.right.pane.tab")
+    .find((e: any) => e.options.key === "project-mode-workers")!;
+  const initial = snapshot();
+  initial.workers = [
+    {
+      ...initial.workers[0],
+      workerId: sid("removed"),
+      name: "Removed",
+      lifecycle: "deleted",
+    },
+    {
+      ...initial.workers[0],
+      workerId: sid("uncreated"),
+      name: "Uncreated",
+      lifecycle: "provision-failed",
+      phase: "failed",
+    },
+    initial.workers[0],
+    {
+      ...initial.workers[0],
+      workerId: sid("recoverable"),
+      name: "Recoverable",
+      phase: "failed",
+    },
+  ];
+  b.client.store.accept(initial);
+  const Component = entry.component as any;
+  const signal = new AbortController().signal;
+  render(
+    <Component
+      {...entry.inject?.()}
+      sessionId={sid("parent")}
+      t={t}
+      useTabInfo={() => ({ tab: { visible: true, signal, actions: {} } })}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: /Removed/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Uncreated/ })).toBeNull();
+  await screen.findByText("Output child");
+  fireEvent.click(screen.getByRole("button", { name: /Recoverable/ }));
+  await screen.findByText("Output recoverable");
+  const originalSignal = b.streamSignals.at(-1)!;
+  const next = {
+    ...initial,
+    revision: 3,
+    workers: initial.workers.map((w) =>
+      w.workerId === sid("recoverable")
+        ? { ...w, lifecycle: "deleted" as const }
+        : w,
+    ),
+  };
+  act(() => b.client.store.accept(next));
+  await screen.findByText("Output child");
+  expect(originalSignal.aborted).toBe(true);
+  expect(screen.queryByText("Output recoverable")).toBeNull();
+  expect(b.client.store.project(sid("parent"))!.workers).toHaveLength(4);
+  act(() =>
+    b.client.store.accept({
+      ...next,
+      revision: 4,
+      workers: next.workers.map((w) => ({
+        ...w,
+        lifecycle: "deleted" as const,
+      })),
+    }),
+  );
+  expect(screen.getByText(en.noWorkers)).toBeTruthy();
+  expect(screen.queryByRole("navigation", { name: en.workers })).toBeNull();
+  expect(screen.queryByText(en.selectWorker)).toBeNull();
+  expect(screen.queryByText("Output child")).toBeNull();
+  expect(b.streamSignals.every((signal) => signal.aborted)).toBe(true);
+});

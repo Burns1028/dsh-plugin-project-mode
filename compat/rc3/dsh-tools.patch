@@ -1,0 +1,57 @@
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -2720,6 +2720,7 @@
+ var ToolLayer = class {
+ 	tools;
+ 	restrictions = new AnonymousEntries();
++	suppressions = new AnonymousEntries();
+ 	guards = new AnonymousEntries();
+ 	/**
+ 	* Presentation this scope's agent declared for itself, shadowing the
+@@ -2732,7 +2733,7 @@
+ 	}
+ 	/** Whether every contribution table in this aggregate layer is empty. */
+ 	isEmpty() {
+-		return this.tools.isEmpty() && this.restrictions.isEmpty() && this.guards.isEmpty() && this.mode === void 0;
++		return this.tools.isEmpty() && this.restrictions.isEmpty() && this.suppressions.isEmpty() && this.guards.isEmpty() && this.mode === void 0;
+ 	}
+ 	/** Whether every compiled restriction in this layer admits a global tool name. */
+ 	admits(name) {
+@@ -3014,6 +3015,15 @@
+ 	* @param guard - synchronous check; a returned string denies the execution.
+ 	* @returns the exact disposer that unregisters the guard.
+ 	*/
++	/** Exact-scope capability suppression, including own registrations. */
++	suppress({ deny }) {
++		if (scopeOf(this.ctx) === void 0) throw new Error("tools.suppress() requires a scoped context");
++		if (!Array.isArray(deny) || deny.length === 0 || deny.some((name) => typeof name !== "string" || name.length === 0)) throw new Error("tools.suppress() requires nonempty tool names");
++		if (deny.includes(RUN_CODE_NAME)) throw new Error("tools.suppress() cannot name the reserved presentation transport");
++		const names = new Set(deny);
++		return this.layers.effect(this.ctx, (layer) => layer.suppressions.append(names), { label: "tools.suppress()" });
++	}
++
+ 	guard(guard) {
+ 		return this.layers.effect(this.ctx, (layer) => layer.guards.append(guard), {
+ 			label: "tools.guard()",
+@@ -3071,6 +3081,10 @@
+ 		if (own !== void 0) for (const [name, definition] of own.tools.entries()) {
+ 			knownNames.add(name);
+ 			visible.set(name, definition);
++		}
++		// Intentionally exact-scope: a coordinator's mask must not constrain workers.
++		if (own !== void 0) for (const names of own.suppressions.values()) {
++			for (const name of names) visible.delete(name);
+ 		}
+ 		if (this.modeFor(scope) !== "native") visible.set(RUN_CODE_NAME, this.requirePtcTransport());
+ 		return {
+--- a/lib/types/index.d.ts
++++ b/lib/types/index.d.ts
+@@ -643,6 +643,8 @@
+      * @returns the exact disposer that lifts this restriction.
+      */
+     restrict(filter: ToolRestriction): () => void;
++    /** Exact-scope suppression, including own registrations; future registrations remain suppressed. */
++    suppress(filter: { readonly deny: readonly string[] }): () => void;
+     /**
+      * Register a monotonic guard after the extensible `tools/pre-execute`
+      * waterfall. A plain-context guard applies globally; one registered through

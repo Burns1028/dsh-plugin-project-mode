@@ -1,0 +1,147 @@
+[
+  {
+    "package": "@deepseek-ai/dsh-tools",
+    "version": "0.2.1-rc.3",
+    "variant": "tools",
+    "patch": "dsh-tools.patch",
+    "runtimePatch": "dsh-tools-runtime.patch",
+    "files": [
+      {
+        "file": "lib/index.js",
+        "before": "1e53932e7c4213ea24a7d87f06960b7a7702cb21f8a5741c97242b4a470a442a",
+        "after": "9bcecd8eba724e4b3b11d6e8535bbadc7d2d1a6293dcd6b5af3195745abd488a"
+      },
+      {
+        "file": "lib/types/index.d.ts",
+        "before": "049df0624956583b8ca05badfd6e9115c6933481571dc17965f36f407bdf95f0",
+        "after": "db86a9df8c99257e2d82baa7b2540debdd816b821553eb308261faf97eed2f67"
+      }
+    ]
+  },
+  {
+    "package": "@deepseek-ai/dsh-client-ui-conversation",
+    "version": "0.2.1-rc.3",
+    "variant": "npm",
+    "patch": "ui-conversation-npm.patch",
+    "runtimePatch": "ui-conversation-npm-runtime.patch",
+    "files": [
+      {
+        "file": "lib/client.js",
+        "before": "b81765f0998430bbf5ab6389e89a082b799f017275c5abe1efb3c701f0fa708a",
+        "after": "04dad7417becded3280279194817795390c27c679a9cdc48e21de36e366d4f82"
+      },
+      {
+        "file": "lib/types/client/service.d.ts",
+        "before": "153ffb179763a6a89973db3552cb2f17b6cde84e9aa40bcb92e65e5ab242ea6e",
+        "after": "c6ed03ed64b62b1d74fcbe83fa0672fe9828810783e19f8e060cd1897be65852"
+      },
+      {
+        "file": "lib/types/client/index.d.ts",
+        "before": "38856f09b9e0aa687342f4996396f053d4b761cb32e11e66480c89e6cc122848",
+        "after": "d54cbad4a7cff4c52f5ad81e7cdc2cafc677a930972960f5ca16cb3dc11e8247"
+      },
+      {
+        "file": "lib/types/client/input/submission-policy.d.ts",
+        "before": "189595891cfff2fe552c126efe55ecf53c9f278f7ec54953d4ba1904ce4c7557",
+        "after": "570569462760020bdc6c8b291fe9301f9239a3a17a72c035fb6fc32630505d12"
+      }
+    ]
+  },
+  {
+    "package": "@deepseek-ai/dsh-client-ui-conversation",
+    "version": "0.2.1-rc.3",
+    "variant": "desktop",
+    "patch": "ui-conversation-desktop.patch",
+    "runtimePatch": "ui-conversation-desktop-runtime.patch",
+    "files": [
+      {
+        "file": "lib/client.js",
+        "before": "cfd9ab6e1b38e89ac9859940bce8b407240e33902d5e231fca76fc68de598bcc",
+        "after": "23b0841bb38fbafd6d0da3c649369a864a6a12101c32ad8172ec53eb49ee1d36"
+      },
+      {
+        "file": "lib/types/client/service.d.ts",
+        "before": "153ffb179763a6a89973db3552cb2f17b6cde84e9aa40bcb92e65e5ab242ea6e",
+        "after": "c6ed03ed64b62b1d74fcbe83fa0672fe9828810783e19f8e060cd1897be65852"
+      },
+      {
+        "file": "lib/types/client/index.d.ts",
+        "before": "38856f09b9e0aa687342f4996396f053d4b761cb32e11e66480c89e6cc122848",
+        "after": "d54cbad4a7cff4c52f5ad81e7cdc2cafc677a930972960f5ca16cb3dc11e8247"
+      },
+      {
+        "file": "lib/types/client/input/submission-policy.d.ts",
+        "before": "189595891cfff2fe552c126efe55ecf53c9f278f7ec54953d4ba1904ce4c7557",
+        "after": "570569462760020bdc6c8b291fe9301f9239a3a17a72c035fb6fc32630505d12"
+      }
+    ]
+  },
+  {
+    "package": "@deepseek-ai/dsh-client-ui-workspace",
+    "version": "0.2.1-rc.3",
+    "variant": "npm",
+    "patch": "ui-workspace-npm.patch",
+    "runtimePatch": "ui-workspace-npm-runtime.patch",
+    "files": [
+      {
+        "file": "lib/client.js",
+        "before": "9c2c17a66a5c20de00ac2852cb76debb5237439e97f877403bcaa2a471086544",
+        "after": "273daac7355d9339fe7dccfcaf6e09f94c69f8562ed1a40d2c1295f68bd37a80"
+      },
+      {
+        "file": "lib/types/client/contract/slots.d.ts",
+        "before": "56e92c29cc0e32b01ba2783ec28f58089c9ade2189e2812bc81c47dfbfa38232",
+        "after": "8f77b67d719658d3cfa736c76b46dc0223de2bc2188a405067b5740b91986996"
+      },
+      {
+        "file": "lib/types/client/index.d.ts",
+        "before": "d00027f7bfe37a276f73883618399780de6baa1ba0ee838ebea797dcdf6ab1d7",
+        "after": "e965d88b7a7ba0bcf18b6665b579b0966e3708d183c1b34fcfea2f01dd4504d3"
+      },
+      {
+        "file": "lib/types/client/rows/Rows.d.ts",
+        "before": "cf583d18f0bb91785b18e6719a974b161e2b091df37dc2751929ed7f89528173",
+        "after": "db689b033b56b8001fc906ebed1a87cdd2965232eb0db30c13b17c64f6bebf70"
+      },
+      {
+        "file": "lib/types/client/rows/WorkspaceBrowser.d.ts",
+        "before": "65e999076c0dad3ff2e4bc32c03af1239cd79d223e92a0717b93aac35d0dc7c3",
+        "after": "f753bb18852f6f2c9f905089ceaef321eaa9bf297ac0785ed2f026c38c7c6959"
+      }
+    ]
+  },
+  {
+    "package": "@deepseek-ai/dsh-client-ui-workspace",
+    "version": "0.2.1-rc.3",
+    "variant": "desktop",
+    "patch": "ui-workspace-desktop.patch",
+    "runtimePatch": "ui-workspace-desktop-runtime.patch",
+    "files": [
+      {
+        "file": "lib/client.js",
+        "before": "ea4e8374efef652aa917122be1422047ef012b68513421195dec31f79ee0543a",
+        "after": "709fef08d682e0e3c2057a856803f8913af8b2701d10ede5fdc9971afbe60455"
+      },
+      {
+        "file": "lib/types/client/contract/slots.d.ts",
+        "before": "56e92c29cc0e32b01ba2783ec28f58089c9ade2189e2812bc81c47dfbfa38232",
+        "after": "8f77b67d719658d3cfa736c76b46dc0223de2bc2188a405067b5740b91986996"
+      },
+      {
+        "file": "lib/types/client/index.d.ts",
+        "before": "d00027f7bfe37a276f73883618399780de6baa1ba0ee838ebea797dcdf6ab1d7",
+        "after": "e965d88b7a7ba0bcf18b6665b579b0966e3708d183c1b34fcfea2f01dd4504d3"
+      },
+      {
+        "file": "lib/types/client/rows/Rows.d.ts",
+        "before": "cf583d18f0bb91785b18e6719a974b161e2b091df37dc2751929ed7f89528173",
+        "after": "db689b033b56b8001fc906ebed1a87cdd2965232eb0db30c13b17c64f6bebf70"
+      },
+      {
+        "file": "lib/types/client/rows/WorkspaceBrowser.d.ts",
+        "before": "65e999076c0dad3ff2e4bc32c03af1239cd79d223e92a0717b93aac35d0dc7c3",
+        "after": "f753bb18852f6f2c9f905089ceaef321eaa9bf297ac0785ed2f026c38c7c6959"
+      }
+    ]
+  }
+]

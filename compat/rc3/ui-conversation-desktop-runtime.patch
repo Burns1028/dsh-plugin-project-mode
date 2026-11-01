@@ -1,0 +1,67 @@
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -4624,6 +4624,7 @@
+ 			input;
+ 			/** The per-session composer-block registry. */
+ 			blocks;
++			submission;
+ 			/** Live upload state per file-kind draft; images never appear here. */
+ 			fileUploads = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)({});
+ 			draftAttachments = /* @__PURE__ */ new Map();
+@@ -4643,6 +4644,7 @@
+ 				super(ctx, "conversation");
+ 				this.input = config.input;
+ 				this.blocks = config.blocks;
++				this.submission = config.submission;
+ 				this.maxConcurrentFileUploads = config.maxConcurrentFileUploads;
+ 				ctx.effect(() => async () => {
+ 					const operations = [...this.fileUploadOperations.values()];
+@@ -16028,6 +16030,31 @@
+ 		var ComposerSubmissionPolicy = class {
+ 			/** Reactive preference source for the composer bar and the Settings row. */
+ 			busyEnter = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)(DEFAULT_BUSY_ENTER_BEHAVIOR);
++			overrides = new Map();
++			overrideRevision = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)(0);
++			register(sessionId, behavior) {
++				const token = Symbol();
++				const entries = this.overrides.get(sessionId) ?? new Map();
++				entries.set(token, behavior);
++				this.overrides.set(sessionId, entries);
++				this.overrideRevision.set(this.overrideRevision.getSnapshot() + 1);
++				return () => {
++					if (!entries.delete(token)) return;
++					if (entries.size === 0) this.overrides.delete(sessionId);
++					this.overrideRevision.set(this.overrideRevision.getSnapshot() + 1);
++				};
++			}
++			forSession(sessionId) {
++				if (sessionId === void 0) return this.busyEnter;
++				return {
++					getSnapshot: () => [...(this.overrides.get(sessionId)?.values() ?? [])].at(-1) ?? this.busyEnter.getSnapshot(),
++					subscribe: (listener) => {
++						const offPreference = this.busyEnter.subscribe(listener);
++						const offOverride = this.overrideRevision.subscribe(listener);
++						return () => { offPreference(); offOverride(); };
++					}
++				};
++			}
+ 			unsubscribe;
+ 			host;
+ 			/**
+@@ -20207,7 +20234,7 @@
+ 						},
+ 						hooks: {
+ 							stopShortcut,
+-							busyEnter: submissionPolicy.busyEnter,
++							busyEnter: submissionPolicy.forSession(sessionId),
+ 							fileUploads: conversation.fileUploads,
+ 							notices: shell.notices,
+ 							lexicon: shell.lexicon,
+@@ -20235,6 +20262,7 @@
+ 			ctx.plugin(ConversationController, {
+ 				input: inputHub,
+ 				blocks: composerBlocks,
++				submission: submissionPolicy,
+ 				maxConcurrentFileUploads
+ 			});
+ 			ctx.plugin(todoDockEntry);

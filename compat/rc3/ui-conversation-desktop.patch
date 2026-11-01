@@ -1,0 +1,132 @@
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -4624,6 +4624,7 @@
+ 			input;
+ 			/** The per-session composer-block registry. */
+ 			blocks;
++			submission;
+ 			/** Live upload state per file-kind draft; images never appear here. */
+ 			fileUploads = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)({});
+ 			draftAttachments = /* @__PURE__ */ new Map();
+@@ -4643,6 +4644,7 @@
+ 				super(ctx, "conversation");
+ 				this.input = config.input;
+ 				this.blocks = config.blocks;
++				this.submission = config.submission;
+ 				this.maxConcurrentFileUploads = config.maxConcurrentFileUploads;
+ 				ctx.effect(() => async () => {
+ 					const operations = [...this.fileUploadOperations.values()];
+@@ -16028,6 +16030,31 @@
+ 		var ComposerSubmissionPolicy = class {
+ 			/** Reactive preference source for the composer bar and the Settings row. */
+ 			busyEnter = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)(DEFAULT_BUSY_ENTER_BEHAVIOR);
++			overrides = new Map();
++			overrideRevision = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)(0);
++			register(sessionId, behavior) {
++				const token = Symbol();
++				const entries = this.overrides.get(sessionId) ?? new Map();
++				entries.set(token, behavior);
++				this.overrides.set(sessionId, entries);
++				this.overrideRevision.set(this.overrideRevision.getSnapshot() + 1);
++				return () => {
++					if (!entries.delete(token)) return;
++					if (entries.size === 0) this.overrides.delete(sessionId);
++					this.overrideRevision.set(this.overrideRevision.getSnapshot() + 1);
++				};
++			}
++			forSession(sessionId) {
++				if (sessionId === void 0) return this.busyEnter;
++				return {
++					getSnapshot: () => [...(this.overrides.get(sessionId)?.values() ?? [])].at(-1) ?? this.busyEnter.getSnapshot(),
++					subscribe: (listener) => {
++						const offPreference = this.busyEnter.subscribe(listener);
++						const offOverride = this.overrideRevision.subscribe(listener);
++						return () => { offPreference(); offOverride(); };
++					}
++				};
++			}
+ 			unsubscribe;
+ 			host;
+ 			/**
+@@ -20207,7 +20234,7 @@
+ 						},
+ 						hooks: {
+ 							stopShortcut,
+-							busyEnter: submissionPolicy.busyEnter,
++							busyEnter: submissionPolicy.forSession(sessionId),
+ 							fileUploads: conversation.fileUploads,
+ 							notices: shell.notices,
+ 							lexicon: shell.lexicon,
+@@ -20235,6 +20262,7 @@
+ 			ctx.plugin(ConversationController, {
+ 				input: inputHub,
+ 				blocks: composerBlocks,
++				submission: submissionPolicy,
+ 				maxConcurrentFileUploads
+ 			});
+ 			ctx.plugin(todoDockEntry);
+--- a/lib/types/client/index.d.ts
++++ b/lib/types/client/index.d.ts
+@@ -25,7 +25,7 @@
+ export type { ConversationGroupRegistry } from './conversation/group-registry.ts';
+ export type { ConversationGroupContext, ConversationGroupData, ConversationGroupDataMap, ConversationGroupDefinition, ConversationGroupedView, ConversationGroupInput, GroupKey, GroupNodePosition, GroupReference, GroupSnapshot, GroupUpdate, NodeChange, NodeKey, NodeReference, RenderEntry, } from './contract/groups.ts';
+ export { ConversationController, UnsupportedImageMediaTypeError } from './service.ts';
+-export type { IConversation } from './service.ts';
++export type { IConversation, ComposerSubmissionOverrides } from './service.ts';
+ export type { ConversationContextReader, ConversationLocation, ConversationLocationData, ConversationLocationDataScope, ConversationLocationDataSource, ConversationLocationDataStore, ConversationMatch, ConversationMatchHandler, ConversationMatchResult, ConversationNodeContext, ConversationNodeDefinition, ConversationNodeDefinitionInput, ConversationPreviousContext, ConversationPublication, ConversationStartMatch, ConversationStepDataMap, ConversationTimelineSnapshot, ConversationTurnDataMap, ConversationViewBuilder, ConversationViewDefinition, ConversationViewNode, ConversationViewSnapshotMap, ConversationViewSnapshotStore, StepLocation, TurnLocation, } from './contract/conversation.ts';
+ export { EMPTY_CONVERSATION_SNAPSHOT, conversationPhase } from './contract/snapshot.ts';
+ export type { ConversationPhase, ConversationSnapshot, } from './contract/snapshot.ts';
+--- a/lib/types/client/service.d.ts
++++ b/lib/types/client/service.d.ts
+@@ -23,7 +23,14 @@
+  * verbs and the input registry other plugins may reach — and exactly what a
+  * test fake must supply.
+  */
++/** Per-Session busy composer policy; no durable settings are changed. */
++export interface ComposerSubmissionOverrides {
++    /** Last live registration wins; the idempotent disposer restores its predecessor. */
++    register(sessionId: SessionId, behavior: InputSubmitMode): () => void;
++}
+ export interface IConversation {
++    /** Override the native busy Enter and Send preference for one Session. */
++    readonly submission: ComposerSubmissionOverrides;
+     /** The per-session input machine registry (SessionInputResolver face). */
+     readonly input: SessionInputResolver;
+     /**
+@@ -64,6 +71,7 @@
+ }
+ /** Scope-addressed conversation service (root singleton, provided as `conversation`). */
+ export declare class ConversationController extends Service implements IConversation {
++    readonly submission: ComposerSubmissionOverrides;
+     /** The per-session input machine registry (SessionInputResolver face). */
+     readonly input: SessionInputResolver;
+     /** The per-session composer-block registry. */
+@@ -86,6 +94,7 @@
+     constructor(ctx: Context, config: {
+         input: SessionInputResolver;
+         blocks: ComposerBlocks;
++        submission: ComposerSubmissionOverrides;
+         maxConcurrentFileUploads: number;
+     });
+     /**
+--- a/lib/types/client/input/submission-policy.d.ts
++++ b/lib/types/client/input/submission-policy.d.ts
+@@ -3,7 +3,8 @@
+  * resolves submission gestures into queue/steer delivery modes; Host and
+  * Agent keep the actual delivery-window authority.
+  */
+-import { type SnapshotStore } from '@deepseek-ai/dsh-client-store';
++import { type SnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store';
++import type { SessionId } from '@deepseek-ai/dsh-session/types';
+ import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client';
+ import type { BusyEnterBehavior, ComposerSubmitGesture, InputSubmitMode } from '../contract/composer-submission.ts';
+ import type { ConversationSettings } from '../../submission-settings.ts';
+@@ -27,6 +28,8 @@
+  * read, backed by the Host user-settings document when one is composed.
+  */
+ export declare class ComposerSubmissionPolicy {
++    register(sessionId: SessionId, behavior: BusyEnterBehavior): () => void;
++    forSession(sessionId: SessionId | undefined): ObservableSnapshot<BusyEnterBehavior>;
+     /** Reactive preference source for the composer bar and the Settings row. */
+     readonly busyEnter: SnapshotStore<BusyEnterBehavior>;
+     private readonly unsubscribe;

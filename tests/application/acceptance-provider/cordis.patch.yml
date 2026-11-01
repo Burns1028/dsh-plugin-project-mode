@@ -1,0 +1,9 @@
+# Test-only adapter; replace /absolute/path/to with your local checkout location.
+# This patch does not install the product under test.
+- insert:
+    - id: project-mode-acceptance-provider
+      name: file:///absolute/path/to/dsh-plugin-project-mode/tests/application/acceptance-provider/index.mjs
+      config:
+        controlRoot: /absolute/path/to/acceptance-control
+        logRoot: /absolute/path/to/acceptance-logs
+        chunkDelayMs: 35

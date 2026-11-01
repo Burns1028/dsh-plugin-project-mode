@@ -1,0 +1,2 @@
+# Unified patch context preserves upstream tab indentation after its marker.
+compat/rc3/*.patch whitespace=-space-before-tab

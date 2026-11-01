@@ -1,0 +1,123 @@
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -2252,7 +2252,44 @@
+ 		* @param props.t - the browser root's locale seat.
+ 		* @returns the session row.
+ 		*/
+-		function SessionNodeItem({ node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, t }) {
++		const branchPrefixStyle = { width: 12, height: 20, flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" };
++		/** A root-scoped branch seam over the original native Session row. */
++		function SessionNodeItem(props) {
++			const renderRow = (prefix) => (0, react_jsx_runtime.jsx)(NativeSessionRow, { ...props, prefix });
++			return (0, react_jsx_runtime.jsx)("div", { children: props.renderSlotChain("sidebar.workspaces.session.branch", {
++				sessionId: props.node.id,
++				currentSessionId: props.currentId,
++				renderRow,
++				renderChild: (options) => (0, react_jsx_runtime.jsx)(SessionBranchChild, options, options.sessionId)
++			}, { fallback: renderRow() }) });
++		}
++		/** Child rows share the native row tokens, title marquee and selection treatment. */
++		function SessionBranchChild({ sessionId, title, icon, trailing, selected, onOpen }) {
++			const titleRef = (0, react.useRef)(null);
++			const marquee = useTitleMarquee(titleRef);
++			return (0, react_jsx_runtime.jsxs)("div", {
++				className: clsx(Rows_module_css_default.sessionRow, selected && Rows_module_css_default.selected),
++				role: "treeitem",
++				"aria-selected": selected,
++				"data-session-id": sessionId,
++				tabIndex: 0,
++				onClick: (event) => { event.stopPropagation(); onOpen(); },
++				onDoubleClick: (event) => event.stopPropagation(),
++				onKeyDown: (event) => {
++					event.stopPropagation();
++					if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); }
++				},
++				onPointerEnter: marquee.enter,
++				onPointerLeave: marquee.leave,
++				children: [
++					(0, react_jsx_runtime.jsx)("span", { style: branchPrefixStyle, "aria-hidden": true }),
++					(0, react_jsx_runtime.jsx)("span", { className: Rows_module_css_default.slot, children: icon }),
++					(0, react_jsx_runtime.jsx)("span", { ref: titleRef, className: Rows_module_css_default.title, children: title }),
++					trailing !== void 0 && (0, react_jsx_runtime.jsx)("span", { className: Rows_module_css_default.time, children: trailing })
++				]
++			});
++		}
++		function NativeSessionRow({ node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, t, prefix }) {
+ 			const row = node;
+ 			const title = displayTitle(node, t);
+ 			const selected = node.id === currentId;
+@@ -2302,6 +2339,7 @@
+ 						drag.drop(rowHalf(e));
+ 					},
+ 					children: [
++						prefix !== void 0 && (0, react_jsx_runtime.jsx)("span", { style: branchPrefixStyle, onClick: (event) => event.stopPropagation(), onDoubleClick: (event) => event.stopPropagation(), onKeyDown: (event) => event.stopPropagation(), children: prefix }),
+ 						(0, react_jsx_runtime.jsx)("span", {
+ 							className: Rows_module_css_default.slot,
+ 							children: !row.archived && !row.blank && (showStatus ? (0, react_jsx_runtime.jsx)(SessionStatusDots, { statuses }) : renderSlot("sidebar.session.row.leading", { sessionId: node.id }))
+@@ -3022,7 +3060,7 @@
+ 			});
+ 		}
+ 		/** The scrolling session tree; unmounting drops the sessions subscription and the session watermarks. */
+-		function SessionTree({ list, useSessionStatus, startSession, open, workspaces, ungroupedSessionIds, rowState, onLeaveArchivedOnly, workspaceReady, animationResetKey, usePanelInfo, onRenameRequest, onDeleteRequest, onSessionRenameRequest, renderSlot, insertWorkspaceBefore, nestWorkspaces, groupExpansion, setGroupExpanded, setSessionOrder, home, t, revealSessionId, onSessionRevealed, shortcuts }) {
++		function SessionTree({ list, useSessionStatus, startSession, open, workspaces, ungroupedSessionIds, rowState, onLeaveArchivedOnly, workspaceReady, animationResetKey, usePanelInfo, onRenameRequest, onDeleteRequest, onSessionRenameRequest, renderSlot, renderSlotChain, insertWorkspaceBefore, nestWorkspaces, groupExpansion, setGroupExpanded, setSessionOrder, home, t, revealSessionId, onSessionRevealed, shortcuts }) {
+ 			const panelActive = usePanelInfo((info) => info.activePanelId !== null);
+ 			const statuses = useSessionStatus((s) => s);
+ 			const current = panelActive ? void 0 : Object.values(list.byId).find((session) => (session.retainedBy.mainView ?? 0) > 0)?.id;
+@@ -3300,6 +3338,7 @@
+ 								onOpen: open,
+ 								onRenameRequest: onSessionRenameRequest,
+ 								renderSlot,
++								renderSlotChain,
+ 								onReveal: node.id === revealSessionId && group.key === revealGroup ? () => {
+ 									onSessionRevealed(node.id);
+ 								} : void 0,
+@@ -3353,7 +3392,7 @@
+ 			});
+ 		}
+ 		/** The flat "In one list" body: every session is one draggable top-level row. */
+-		function FlatList({ list, sessionIds, rowState, onLeaveArchivedOnly, useSessionStatus, open, onSessionRenameRequest, usePanelInfo, setSessionOrder, workspaceReady, animationResetKey, revealSessionId, onSessionRevealed, renderSlot, t }) {
++		function FlatList({ list, sessionIds, rowState, onLeaveArchivedOnly, useSessionStatus, open, onSessionRenameRequest, usePanelInfo, setSessionOrder, workspaceReady, animationResetKey, revealSessionId, onSessionRevealed, renderSlot, renderSlotChain, t }) {
+ 			const panelActive = usePanelInfo((info) => info.activePanelId !== null);
+ 			const statuses = useSessionStatus((s) => s);
+ 			const rows = (0, react.useMemo)(() => deriveFlat(list, sessionIds, rowState, statuses), [
+@@ -3396,6 +3435,7 @@
+ 							onOpen: open,
+ 							onRenameRequest: onSessionRenameRequest,
+ 							renderSlot,
++							renderSlotChain,
+ 							onReveal: node.id === revealSessionId ? () => {
+ 								onSessionRevealed(node.id);
+ 							} : void 0,
+@@ -3507,7 +3547,7 @@
+ 		* @param props - composed slot props (shell owner share + store + injected actions).
+ 		* @returns the region element tree.
+ 		*/
+-		function WorkspaceBrowser({ wide, usePanelInfo, expandSidebar, useSessions, useSessionStatus, useWorkspaces, useStore, actions, startSession, open, requestSessionRename, notifyArchivedNotOpenable, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, unarchiveSession, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, useHostInfo, useShortcuts, useWorkspaceShortcuts, requestSearch, requestAddWorkspace, closeAddWorkspace, setDirectoryBusy, renderSlot, t }) {
++		function WorkspaceBrowser({ wide, usePanelInfo, expandSidebar, useSessions, useSessionStatus, useWorkspaces, useStore, actions, startSession, open, requestSessionRename, notifyArchivedNotOpenable, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, unarchiveSession, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, useHostInfo, useShortcuts, useWorkspaceShortcuts, requestSearch, requestAddWorkspace, closeAddWorkspace, setDirectoryBusy, renderSlot, renderSlotChain, t }) {
+ 			const home = useHostInfo((info) => info.home);
+ 			const shortcuts = useShortcuts((rows) => rows);
+ 			const searchShortcut = shortcuts.find((row) => row.id === "session.search");
+@@ -3988,6 +4028,7 @@
+ 							open: guardedOpen,
+ 							onSessionRenameRequest: requestSessionRename,
+ 							renderSlot,
++							renderSlotChain,
+ 							setSessionOrder: saveSessionOrder,
+ 							revealSessionId,
+ 							onSessionRevealed: acknowledgeSessionReveal,
+@@ -3999,6 +4040,7 @@
+ 							useSessionStatus,
+ 							onSessionRenameRequest: requestSessionRename,
+ 							renderSlot,
++							renderSlotChain,
+ 							workspaces: orderedWorkspaces,
+ 							ungroupedSessionIds: orderedUngroupedSessionIds,
+ 							workspaceReady,
+@@ -5221,6 +5263,7 @@
+ 			ctx.slots.inject("sidebar.workspaces", () => ctx.slots.register({
+ 				name: "sidebar.workspaces",
+ 				children: {
++					"sidebar.workspaces.session.branch": { kind: "chain", scope: "root" },
+ 					"sidebar.workspaces.directoryFlow": {
+ 						kind: "single",
+ 						scope: "root"
