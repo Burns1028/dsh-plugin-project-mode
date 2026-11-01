@@ -1,6 +1,6 @@
 # Contributor contract
 
-Read README.md and docs/moa-architecture.md before changing behavior.
+Read README.md, docs/moa-architecture.md, docs/architecture.md and CONTRIBUTING.md before changing behavior.
 
 - Use native DSH Agent Loop, sessions, projection, delivery, filesystem permissions and Stop semantics. Do not add a second scheduler or task-specific delegation gates.
 - The Coordinator owns notes.md and archived.md. Both roles maintain reusable knowledge through context/context.md and progressive loading. Role prompts explain goals, responsibilities and operating flow clearly.

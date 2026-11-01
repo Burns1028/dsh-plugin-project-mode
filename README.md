@@ -2,7 +2,7 @@
 
 A persistent Coordinator, continuable Workers, and shared project memory built on native DSH sessions.
 
-[中文说明](README.zh.md) · [MOA architecture](docs/moa-architecture.md) · [Tool API](docs/tool-api.md) · [Compatibility](docs/compatibility.md)
+[中文说明](README.zh.md) · [MOA architecture](docs/moa-architecture.md) · [Code architecture](docs/architecture.md) · [Tool API](docs/tool-api.md) · [Compatibility](docs/compatibility.md)
 
 **Developer preview, v0.1.21.** This release targets **DSH 0.2.1-rc.3 with the three explicit compatibility extensions in this repository**. Stock rc.3 cannot enable the plugin. There is no automatic application patching or npm publication.
 
@@ -54,13 +54,15 @@ The helper verifies exact rc.3 versions and SHA-256 hashes before writing. It ba
 
 ## Installation
 
-First prepare a compatible DSH runtime as described above. Then install the Git tag through that runtime's CLI:
+First prepare the DSH runtime you intend to use with the documented compatibility extensions. The development commands above patch only this checkout's `node_modules`; they do not prepare your installed DSH application. Then install the Git tag through the compatible runtime's CLI:
 
 ```sh
 dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.21"
 ```
 
 Alternatively, install the `dsh-plugin-project-mode-0.1.21-npm.tgz` asset from [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases). The Git root forwards to the nested Cordis bundle and includes built artifacts; no build hook is required at installation. A packaged Desktop application needs a separately prepared compatible runtime; this project does not offer a one-click Desktop patch installer.
+
+For module responsibilities, key structures, execution paths and the test map, read [Code architecture](docs/architecture.md) and [Contributing](CONTRIBUTING.md).
 
 ## Verification and limits
 

@@ -12,6 +12,10 @@ Available only to the enabled Project coordinator. DSH still owns permission che
 | `interrupt` | `worker_id` | Request native cancellation; pending queue follows DSH |
 | `delete` | `worker_id` | Drain native resources and remove Project membership |
 
+`list/get` return a `WorkerView`. Its `lifecycle` is Project membership; `status` is busy/idle/unknown; `availability` describes live/cold/unavailable native observation; `phase` is a derived display label. `activity` contains the latest committed input, latest human input, native `observedThroughSeq`, pending human input previews and their total count. An unavailable activity read returns `null`.
+
+The current activity preview includes the latest three pending human inputs and a total count. `list` text uses `progressTextMaxChars` (default 100 characters); `get` returns full text for those entries, with the same preview count. Committed dialogue is read through explicit `history` windows. These preview limits do not cap history or the full automatic completion payload. No human read cursor or separate acknowledgement state is maintained.
+
 `spawn` and `send` may include `task_ref` to link a task in notes. A successful dispatch response means admission, not completion. The coordinator normally delegates before updating task files.
 
 ```json

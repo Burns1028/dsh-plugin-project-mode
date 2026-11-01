@@ -35,4 +35,4 @@ dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-pr
 
 也可以安装 [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases) 中的 npm tgz。打包后的 Desktop 需要单独准备兼容运行时，本项目没有一键修改 Desktop 的安装器。
 
-参见 [架构](docs/moa-architecture.md)、[兼容说明](docs/compatibility.md)、[工具 API](docs/tool-api.md)、[验证记录](docs/verification.md) 与 [手工验收](docs/manual-verification.md)。MIT 开源；本仓库不包含私人对话、截图、凭据或私人开发历史。
+参见 [MOA 职责](docs/moa-architecture.md)、[代码架构与数据结构](docs/architecture.md)、[贡献指南](CONTRIBUTING.md)、[兼容说明](docs/compatibility.md)、[工具 API](docs/tool-api.md)、[验证记录](docs/verification.md) 与 [手工验收](docs/manual-verification.md)。MIT 开源；本仓库不包含私人对话、截图、凭据或私人开发历史。
