@@ -112,7 +112,7 @@
   "engines": {
     "node": ">=24.9.0"
   },
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "Native Project coordination with continuable workers for DeepSeek Harness.",
   "license": "MIT",
   "main": "./packages/project-mode/lib/index.js",

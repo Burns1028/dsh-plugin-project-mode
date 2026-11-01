@@ -1,3 +1,4 @@
+import { isVisibleWorker } from "../shared/worker-membership.ts";
 import { SubagentError } from "@deepseek-ai/dsh-subagent";
 import { randomUUID } from "node:crypto";
 import { SessionId } from "@deepseek-ai/dsh-session";
@@ -30,7 +31,7 @@ export class WorkerOperations {
     const r = this.host.requireCoordinator(agent);
     return Promise.all(
       r.workers
-        .filter((w) => w.lifecycle !== "deleted")
+        .filter(isVisibleWorker)
         .map((w) => this.host.inspect(w, signal)),
     );
   }
@@ -106,49 +107,8 @@ export class WorkerOperations {
       agent.session,
       "turnBoundary",
     )!.lastTurn;
-    if (req.action === "interrupt" || req.action === "delete") {
-      const worker = this.host.worker(r, req.worker_id);
-      if (req.action === "interrupt" && worker.lifecycle === "deleted")
-        throw new Error("project-mode/worker-inactive");
-      if (req.action === "interrupt")
-        this.host.ctx.subagents.interrupt(req.worker_id, {
-          kind: "ancestor",
-          agent,
-        });
-      else if (worker.lifecycle !== "deleted") {
-        await this.host.update(agent.id, (r) => ({
-          ...r,
-          workers: r.workers.map((w) =>
-            w.id === worker.id ? { ...w, lifecycle: "deleting" } : w,
-          ),
-        }));
-        await this.host.ctx.subagents.drainChildren(agent, [req.worker_id]);
-        await this.host.update(agent.id, (r) => ({
-          ...r,
-          workers: r.workers.map((w) =>
-            w.id === worker.id
-              ? { ...w, lifecycle: "deleted", deletedAt: Date.now() }
-              : w,
-          ),
-        }));
-      }
-      const receipt: ControlReceipt = {
-        operationId,
-        workerId: req.worker_id,
-        accepted: true,
-        ...(req.action === "delete"
-          ? { lifecycle: "deleted", historyRetained: true }
-          : { queuedWorkPolicy: "native-preserve" }),
-      };
-      await this.host.update(agent.id, (r) => ({
-        ...r,
-        operations: {
-          ...r.operations,
-          [operationId]: JSON.parse(JSON.stringify(receipt)),
-        },
-      }));
-      return receipt;
-    }
+    if (req.action === "interrupt" || req.action === "delete")
+      return this.interruptOrDelete(agent, req, operationId);
     let assignment = r.assignments.find((a) => a.operationId === operationId);
     const workerId =
       req.action === "spawn"
@@ -184,79 +144,24 @@ export class WorkerOperations {
       );
     }
     const assignmentId = randomUUID();
-    await this.host.update(agent.id, (r) => ({
-      ...r,
-      workers:
-        req.action === "spawn"
-          ? [
-              ...r.workers,
-              {
-                id: workerId,
-                name: req.name,
-                description: req.task,
-                creationOperationId: operationId,
-                lifecycle: "provisioning",
-                createdAt: Date.now(),
-              },
-            ]
-          : r.workers,
-      assignments: [
-        ...r.assignments,
-        {
-          id: assignmentId,
-          operationId,
-          workerId,
-          coordinatorTurn: turn,
-          segmentStartSeq: placement.segmentStartSeq,
-          participationSeq:
-            nativeOperationSeq(operationId, agent.id) ?? placement.lastSeq,
-          participationKind: req.action === "spawn" ? "spawn" : "send",
-          delivery: req.action === "spawn" ? "steer" : req.delivery,
-          admission: "prepared",
-          ...(req.task_ref ? { taskRef: req.task_ref } : {}),
-        },
-      ],
-    }));
+    await this.prepareAssignment(
+      agent,
+      req,
+      operationId,
+      workerId,
+      assignmentId,
+      turn,
+      placement,
+    );
     let accepted = false;
     try {
-      let messageId: string;
-      if (req.action === "spawn") {
-        const activation = await this.host.ctx.subagents.startActivation({
-          provider: "spawn",
-          label: req.name,
-          childId: workerId,
-          delivery: "caller",
-          signal,
-          request: {
-            parent: agent,
-            prompt: [{ type: "text", text: req.task }],
-            cwd: this.host.ctx.workingDirectory.get(agent.session),
-          },
-        });
-        void activation.result.catch((error) => {
-          this.host.errors.set(workerId, String(error));
-          this.host.notify();
-        });
-        messageId = activation.messageId;
-      } else {
-        const deliver =
-          req.delivery === "queue"
-            ? queueHostSubagentPrompt
-            : steerHostSubagentPrompt;
-        messageId = await deliver(
-          this.host.ctx.subagents,
-          agent,
-          workerId,
-          [{ type: "text", text: req.message }],
-          {
-            kind: "project-mode-assignment",
-            form: "relay",
-            operationId,
-            coordinatorSessionId: agent.id,
-          },
-          signal,
-        );
-      }
+      const messageId = await this.admitWorkerInput(
+        agent,
+        req,
+        operationId,
+        workerId,
+        signal,
+      );
       accepted = true;
       const receipt = await this.acceptReceipt(
         agent,
@@ -294,6 +199,149 @@ export class WorkerOperations {
       throw error;
     }
   }
+  /** Stop/removal is independent from assigning another turn of work. */
+  private async interruptOrDelete(
+    agent: Agent,
+    req: Extract<ControlWorkersRequest, { action: "interrupt" | "delete" }>,
+    operationId: string,
+  ): Promise<ControlReceipt> {
+    const r = this.host.requireCoordinator(agent);
+    const worker = this.host.worker(r, req.worker_id);
+    if (req.action === "interrupt" && worker.lifecycle === "deleted")
+      throw new Error("project-mode/worker-inactive");
+    if (req.action === "interrupt")
+      this.host.ctx.subagents.interrupt(req.worker_id, {
+        kind: "ancestor",
+        agent,
+      });
+    else if (worker.lifecycle !== "deleted") {
+      await this.host.update(agent.id, (r) => ({
+        ...r,
+        workers: r.workers.map((w) =>
+          w.id === worker.id ? { ...w, lifecycle: "deleting" } : w,
+        ),
+      }));
+      await this.host.ctx.subagents.drainChildren(agent, [req.worker_id]);
+      await this.host.update(agent.id, (r) => ({
+        ...r,
+        workers: r.workers.map((w) =>
+          w.id === worker.id
+            ? { ...w, lifecycle: "deleted", deletedAt: Date.now() }
+            : w,
+        ),
+      }));
+    }
+    const receipt: ControlReceipt = {
+      operationId,
+      workerId: req.worker_id,
+      accepted: true,
+      ...(req.action === "delete"
+        ? { lifecycle: "deleted", historyRetained: true }
+        : { queuedWorkPolicy: "native-preserve" }),
+    };
+    await this.host.update(agent.id, (r) => ({
+      ...r,
+      operations: {
+        ...r.operations,
+        [operationId]: JSON.parse(JSON.stringify(receipt)),
+      },
+    }));
+    return receipt;
+  }
+
+  /** Record operation intent before crossing native inbox admission. */
+  private async prepareAssignment(
+    agent: Agent,
+    req: Extract<ControlWorkersRequest, { action: "spawn" | "send" }>,
+    operationId: string,
+    workerId: SessionId,
+    assignmentId: string,
+    turn: number,
+    placement: ReturnType<typeof projected>,
+  ): Promise<void> {
+    await this.host.update(agent.id, (r) => ({
+      ...r,
+      workers:
+        req.action === "spawn"
+          ? [
+              ...r.workers,
+              {
+                id: workerId,
+                name: req.name,
+                description: req.task,
+                creationOperationId: operationId,
+                lifecycle: "provisioning",
+                createdAt: Date.now(),
+              },
+            ]
+          : r.workers,
+      assignments: [
+        ...r.assignments,
+        {
+          id: assignmentId,
+          operationId,
+          workerId,
+          coordinatorTurn: turn,
+          segmentStartSeq: placement.segmentStartSeq,
+          participationSeq:
+            nativeOperationSeq(operationId, agent.id) ?? placement.lastSeq,
+          participationKind: req.action === "spawn" ? "spawn" : "send",
+          delivery: req.action === "spawn" ? "steer" : req.delivery,
+          admission: "prepared",
+          ...(req.task_ref ? { taskRef: req.task_ref } : {}),
+        },
+      ],
+    }));
+  }
+
+  private async admitWorkerInput(
+    agent: Agent,
+    req: Extract<ControlWorkersRequest, { action: "spawn" | "send" }>,
+    operationId: string,
+    workerId: SessionId,
+    signal: AbortSignal,
+  ): Promise<string> {
+    if (req.action === "spawn") {
+      const activation = await this.host.ctx.subagents.startActivation({
+        provider: "spawn",
+        label: req.name,
+        childId: workerId,
+        delivery: "caller",
+        signal,
+        request: {
+          parent: agent,
+          prompt: [{ type: "text", text: req.task }],
+          cwd: this.host.ctx.workingDirectory.get(agent.session),
+        },
+      });
+      void activation.result.catch((error) => {
+        this.host.ctx.logger.warn(
+          `project-mode: worker ${workerId}: ${String(error)}`,
+        );
+        this.host.notify();
+      });
+      return activation.messageId;
+    } else {
+      const deliver =
+        req.delivery === "queue"
+          ? queueHostSubagentPrompt
+          : steerHostSubagentPrompt;
+      return deliver(
+        this.host.ctx.subagents,
+        agent,
+        workerId,
+        [{ type: "text", text: req.message }],
+        {
+          kind: "project-mode-assignment",
+          form: "relay",
+          operationId,
+          coordinatorSessionId: agent.id,
+        },
+        signal,
+      );
+    }
+  }
+
   private async acceptReceipt(
     agent: Agent,
     operationId: string,

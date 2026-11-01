@@ -42,6 +42,7 @@ export default class ProjectMode extends TypertRemoteService {
     private outbox;
     private workers;
     private turns;
+    private lifecycle;
     private get access();
     private mounted;
     private reconcilingTools;
@@ -52,7 +53,6 @@ export default class ProjectMode extends TypertRemoteService {
     private progress;
     private workerInputSnapshots;
     private epoch;
-    private errors;
     private available;
     private closing;
     constructor(ctx: Context, config: Config);
@@ -61,6 +61,7 @@ export default class ProjectMode extends TypertRemoteService {
     private record;
     private owner;
     private authorize;
+    private reconcileTools;
     private attach;
     private roleText;
     private notify;
@@ -86,6 +87,5 @@ export default class ProjectMode extends TypertRemoteService {
     timeline(sessionId: SessionId, workerId: SessionId, limit: number, signal: AbortSignal): AsyncIterable<WorkerTimelinePage>;
     private readHistory;
     mode(sessionId: SessionId): SessionModeView;
-    private modeLocked;
     setEnabled(sessionId: SessionId, enabled: boolean, expectedRevision: number, requestId: string): Promise<SessionModeView>;
 }

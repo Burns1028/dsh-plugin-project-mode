@@ -61,10 +61,10 @@ export declare const assignmentSchema: z.ZodObject<{
     }>;
     messageId: z.ZodOptional<z.ZodString>;
     admission: z.ZodEnum<{
+        rejected: "rejected";
+        unknown: "unknown";
         prepared: "prepared";
         accepted: "accepted";
-        unknown: "unknown";
-        rejected: "rejected";
     }>;
     rejection: z.ZodOptional<z.ZodObject<{
         code: z.ZodString;
@@ -212,10 +212,10 @@ export declare const recordSchema: z.ZodObject<{
         }>;
         messageId: z.ZodOptional<z.ZodString>;
         admission: z.ZodEnum<{
+            rejected: "rejected";
+            unknown: "unknown";
             prepared: "prepared";
             accepted: "accepted";
-            unknown: "unknown";
-            rejected: "rejected";
         }>;
         rejection: z.ZodOptional<z.ZodObject<{
             code: z.ZodString;
@@ -298,8 +298,11 @@ export declare const recordSchema: z.ZodObject<{
     toggles: z.ZodRecord<z.ZodString, z.ZodNumber>;
     reminders: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodBoolean>>;
 }, z.core.$strip>;
+/** Persisted Project aggregate; execution remains in native Session history. */
 export type RecordState = z.infer<typeof recordSchema>;
+/** One ended native Worker turn and its canonical final assistant payload. */
 export type Completion = z.infer<typeof completionSchema>;
+/** Project membership record, independent of a Worker's live execution status. */
 export type Worker = z.infer<typeof workerSchema>;
 export declare const domainSpec: {
     name: string;
@@ -340,7 +343,7 @@ export declare const domainSpec: {
                 workerId: string;
                 coordinatorTurn: number;
                 delivery: "steer" | "queue";
-                admission: "prepared" | "accepted" | "unknown" | "rejected";
+                admission: "rejected" | "unknown" | "prepared" | "accepted";
                 segmentStartSeq?: number | undefined;
                 participationSeq?: number | undefined;
                 participationKind?: "spawn" | "send" | undefined;

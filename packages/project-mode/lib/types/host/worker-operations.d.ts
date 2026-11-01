@@ -10,6 +10,11 @@ export declare class WorkerOperations {
     listWorkers(agent: Agent, signal: AbortSignal): Promise<WorkerView[]>;
     controlForAgent(agent: Agent, request: ControlWorkersRequest, operationId: string, signal: AbortSignal): Promise<ControlResult>;
     private dispatch;
+    /** Stop/removal is independent from assigning another turn of work. */
+    private interruptOrDelete;
+    /** Record operation intent before crossing native inbox admission. */
+    private prepareAssignment;
+    private admitWorkerInput;
     private acceptReceipt;
     reconcileAssignment(agent: Agent, assignmentId: string): Promise<void>;
 }

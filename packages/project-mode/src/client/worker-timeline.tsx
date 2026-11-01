@@ -1,3 +1,4 @@
+import { isVisibleWorker } from "../shared/worker-membership.ts";
 import * as React from "react";
 import {
   FileTypeIcon,
@@ -53,11 +54,7 @@ export function WorkersPanel({
   const { tab } = useTabInfo();
   const [chosen, choose] = React.useState<SessionId>();
   const axisRef = React.useRef<HTMLElement>(null);
-  const workers = (project?.workers ?? []).filter(
-      (worker) =>
-        worker.lifecycle !== "deleted" &&
-        worker.lifecycle !== "provision-failed",
-    ),
+  const workers = (project?.workers ?? []).filter(isVisibleWorker),
     worker = workers.find((w) => w.workerId === chosen) ?? workers[0];
   const [windowSize, setWindowSize] = React.useState(10),
     [retry, setRetry] = React.useState(0);

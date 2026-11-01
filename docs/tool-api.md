@@ -5,14 +5,14 @@ Available only to the enabled Project coordinator. DSH still owns permission che
 | Action | Required arguments | Result |
 | --- | --- | --- |
 | `spawn` | `name`, `task` | Native child and accepted initial-message receipt |
-| `list` | none | Managed workers and real current status |
+| `list` | none | Visible managed workers and real current status |
 | `get` | `worker_id` | One worker's status and progress |
 | `send` | `worker_id`, `message`, `delivery` | Native message acceptance; `delivery` is `steer` or `queue` |
 | `history` | `worker_id`, `offset`, `limit` | Current worker status and a newest-first user/assistant message window |
 | `interrupt` | `worker_id` | Request native cancellation; pending queue follows DSH |
 | `delete` | `worker_id` | Drain native resources and remove Project membership |
 
-`list/get` return a `WorkerView`. Its `lifecycle` is Project membership; `status` is busy/idle/unknown; `availability` describes live/cold/unavailable native observation; `phase` is a derived display label. `activity` contains the latest committed input, latest human input, native `observedThroughSeq`, pending human input previews and their total count. An unavailable activity read returns `null`.
+`list` returns an array of `WorkerView`; `get` returns one `WorkerView`. Public lists/snapshots omit deleted members and failed creation placeholders, while existing Workers with failed execution remain visible. Internal operation records are retained. Its `lifecycle` is Project membership; `status` is busy/idle/unknown; `availability` describes live/cold/unavailable native observation; `phase` is a derived display label. `activity` contains the latest committed input, latest human input, native `observedThroughSeq`, pending human input previews and their total count. An unavailable activity read returns `null`.
 
 The current activity preview includes the latest three pending human inputs and a total count. `list` text uses `progressTextMaxChars` (default 100 characters); `get` returns full text for those entries, with the same preview count. Committed dialogue is read through explicit `history` windows. These preview limits do not cap history or the full automatic completion payload. No human read cursor or separate acknowledgement state is maintained.
 

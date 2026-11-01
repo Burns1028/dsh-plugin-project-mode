@@ -36,6 +36,7 @@ The single-worker command is useful on a busy machine because several native int
 | Concern | Relevant tests |
 | --- | --- |
 | Coordinator tool replacement and native UI row contract | `tests/native-contract/standard-tool-isolation.spec.ts`, `sidebar-branch.spec.tsx` |
+| Background failure isolation and Worker membership | `tests/host/fault-isolation.spec.ts`, `review.spec.ts` |
 | Same-turn closure, Stop and continuation | `tests/host/native.spec.ts`, `native-tool-continuation.spec.ts` |
 | Result identity and recovery deduplication | `tests/host/native-receipt.spec.ts`, `native-receipt-recovery.spec.ts` |
 | Capsule turn/segment ownership | `tests/host/capsule-provenance.spec.ts`, `tests/client/store.spec.ts` |

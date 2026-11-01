@@ -262,7 +262,6 @@ export class CompletionOutbox {
               : x,
           ),
         }));
-        this.host.errors.delete(parentId);
       } catch (error) {
         await this.host.update(parentId, (r) => ({
           ...r,
@@ -290,7 +289,6 @@ export class CompletionOutbox {
               ),
             ),
           );
-        this.host.errors.set(parentId, String(error));
         this.host.notify();
       }
     }

@@ -80,8 +80,6 @@ export class TurnCoordination {
           const results = r.deliveries.filter(
             (d) => d.state !== "consumed" && d.state !== "suppressed",
           );
-          if (this.host.errors.has("runtime"))
-            throw new Error(this.host.errors.get("runtime"));
           if (
             !pending.length &&
             !results.length &&

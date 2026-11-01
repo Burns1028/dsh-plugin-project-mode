@@ -1,3 +1,7 @@
+import { bindAgentEvents } from "./agent-events.ts";
+import { buildProjectSnapshot } from "./project-views.ts";
+import { ProjectLifecycle, hasOwnTurn } from "./project-lifecycle.ts";
+import { isVisibleWorker } from "../shared/worker-membership.ts";
 import type {} from "@deepseek-ai/dsh-agent-preset-registry";
 import { CompletionOutbox } from "./completion-outbox.ts";
 import { WorkerOperations } from "./worker-operations.ts";
@@ -9,17 +13,13 @@ import { repairCapsuleOwnership } from "./capsule-participation.ts";
 import type { HostAccess } from "./host-access.ts";
 import { Context, Service } from "@deepseek-ai/cordis";
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
-import { SessionId, type SessionEvent } from "@deepseek-ai/dsh-session";
-import { freezeMessage } from "@deepseek-ai/dsh-llm";
-import { controlSchema, historySchema } from "./control.ts";
+import { SessionId } from "@deepseek-ai/dsh-session";
+import { createWorkerControlTool, historySchema } from "./control.ts";
 import {
-  ordinarySessionResolver,
   resolveOrdinaryAgent,
-  toolOperationId,
   registerProjection,
   projected,
   abortableChange,
-  waitForTurn,
   observeForTurn,
 } from "./native.ts";
 import type {} from "@deepseek-ai/dsh-api-session-controller";
@@ -31,15 +31,10 @@ import type {} from "@deepseek-ai/dsh-working-directory";
 import type {} from "@deepseek-ai/dsh-sandbox-policy";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { randomUUID } from "node:crypto";
-import { resolve, relative, isAbsolute } from "node:path";
 import { Config } from "./config.ts";
 import { coordinatorPrompt } from "./coordinator-prompt.ts";
 import { workerPrompt } from "./worker-prompt.ts";
-import {
-  contextIndexPath,
-  contextIndexTemplate,
-  ensureContextIndex,
-} from "./project-memory.ts";
+import { contextIndexPath } from "./project-memory.ts";
 import { readWorkerActivity } from "./worker-activity.ts";
 import {
   domainSpec,
@@ -55,20 +50,10 @@ import type {
   WorkerView,
   WorkerHistoryPage,
   WorkerTimelinePage,
-  CoordinatorTurnView,
   SessionModeView,
 } from "../shared/index.ts";
 export { Config } from "./config.ts";
 export * from "../shared/index.ts";
-
-function hasOwnTurn(
-  events: readonly SessionEvent[],
-  inheritedEventCount: number,
-) {
-  return events.some(
-    (event) => event.type === "turn/start" && event.seq >= inheritedEventCount,
-  );
-}
 
 declare module "@deepseek-ai/dsh-llm" {
   interface MessageSourceMap {
@@ -117,12 +102,12 @@ export default class ProjectMode extends TypertRemoteService {
   private outbox!: CompletionOutbox;
   private workers!: WorkerOperations;
   private turns!: TurnCoordination;
+  private lifecycle!: ProjectLifecycle;
   private get access(): HostAccess {
     return {
       ctx: this.ctx,
       config: this.config,
       closing: this.closing,
-      errors: this.errors,
       listeners: this.listeners,
       record: (id) => this.record(id),
       owner: (id) => this.owner(id),
@@ -153,7 +138,6 @@ export default class ProjectMode extends TypertRemoteService {
   private progress = new Map<SessionId, string>();
   private workerInputSnapshots = new Map<SessionId, string>();
   private epoch = randomUUID();
-  private errors = new Map<string, string>();
   private available = false;
   private closing = new AbortController();
   constructor(
@@ -174,6 +158,11 @@ export default class ProjectMode extends TypertRemoteService {
     this.outbox = new CompletionOutbox(this.access);
     this.workers = new WorkerOperations(this.access);
     this.turns = new TurnCoordination(this.access);
+    this.lifecycle = new ProjectLifecycle(this.access, {
+      put: (id, record) => this.domain.table("projects").put(id, record),
+      attach: (agent) => this.attach(agent),
+      recover: (id) => this.recover(id),
+    });
     await registerProjection(this.ctx);
     // Tool guidance uses named sections. Preserve other providers' text and
     // native complete-prompt ownership; never rewrite arbitrary prompt strings.
@@ -224,232 +213,25 @@ export default class ProjectMode extends TypertRemoteService {
           ? coordinatorPrompt
           : "",
     });
-    this.controlTool = defineTool({
-      name: "control_workers",
-      description:
-        "Delegate tasks to workers with the same native tools and skills. spawn starts independent execution; send continues it; list/get/history inspect; interrupt/delete manage lifecycle. When waiting for workers, yield your response; results resume this coordinator turn automatically.",
-      parameters: {
-        action: {
-          type: "string",
-          required: true,
-          description:
-            "Action: spawn, list, send, get, history, interrupt, delete",
-        },
-        name: { type: "string", description: "Worker name" },
-        task: { type: "string", description: "Initial task" },
-        worker_id: { type: "string", description: "Worker session id" },
-        message: { type: "string", description: "Follow-up" },
-        delivery: {
-          type: "string",
-          enum: ["steer", "queue"],
-          description: "Immediate step or next turn",
-        },
-        offset: {
-          type: "integer",
-          description: "History index from newest (0 = latest visible message)",
-        },
-        limit: {
-          type: "integer",
-          description:
-            "History window length; returns user/assistant messages newest first",
-        },
-        task_ref: { type: "string", description: "Task reference" },
+    this.controlTool = createWorkerControlTool((...args) =>
+      this.controlForAgent(...args),
+    );
+    bindAgentEvents(this.access, {
+      outbox: this.outbox,
+      workers: this.workers,
+      progress: this.progress,
+      reconcileTools: () => this.reconcileTools(),
+      attach: (agent) => this.attach(agent),
+      disposeAgent: (agent) => {
+        this.workerInputSnapshots.delete(agent.id);
+        this.mounted.get(agent)?.dispose();
+        this.mounted.delete(agent);
       },
-      output: {
-        schema: { type: "string" },
-        render: (_a, value) => [{ type: "text", text: value }],
-      },
-      execute: async (args, exec) => {
-        if (!exec.agent) throw new Error("project-mode/not-coordinator");
-        return JSON.stringify(
-          await this.controlForAgent(
-            exec.agent,
-            controlSchema.parse(args),
-            toolOperationId(exec),
-            exec.signal,
-          ),
-        );
-      },
-    });
-    this.ctx.on("agent/pre-step", async ({ agent, signal }, next) => {
-      const decision = await next();
-      const project = this.record(agent.id) ?? this.owner(agent.id);
-      if (
-        decision.kind !== "enter" ||
-        project?.project.mode !== "enabled" ||
-        !decision.messages.some((m) =>
-          [
-            "user",
-            "project-mode-assignment",
-            "project-mode-result",
-            "subagent-settled",
-            "agent-message",
-          ].includes(m.source.kind),
-        )
-      )
-        return decision;
-      const control = AbortSignal.any([signal, this.closing.signal]);
-      try {
-        await ensureContextIndex(this.ctx, agent, project.project, control);
-      } catch (error) {
-        control.throwIfAborted();
-        // Context migration is best effort; a native permission denial must
-        // not prevent clarification or other otherwise-available work.
-        this.ctx.logger.warn(`project-mode: context index: ${String(error)}`);
-      }
-      return decision;
-    });
-    this.ctx.on("tools/change", () => {
-      if (this.closing.signal.aborted) return;
-      if (this.reconcilingTools) {
-        this.toolsChangedDuringReconciliation = true;
-        return;
-      }
-      for (const agent of this.ctx.agents.list()) this.attach(agent);
-    });
-    this.ctx.on("agent/created", async ({ agent }) => {
-      this.attach(agent);
-      if (this.record(agent.id)) this.enqueue(() => this.recover(agent.id));
-      this.notify();
-      return undefined;
-    });
-    this.ctx.on("agent/status", () => this.notify());
-    this.ctx.on("agent/assistant-stream", ({ agent, frame }) => {
-      if (!this.owner(agent.id)) return;
-      if (frame.type === "start") this.progress.delete(agent.id);
-      if (frame.type === "chunk" && frame.chunk.type === "text-delta")
-        this.progress.set(
-          agent.id,
-          ((this.progress.get(agent.id) ?? "") + frame.chunk.text).slice(
-            -this.config.progressTextMaxChars,
-          ),
-        );
-      this.notify();
-    });
-    this.ctx.on("agent/inbox/inserted", () => this.notify());
-    this.ctx.on("session/event", (session, event) => {
-      if (
-        event.type === "turn/start" &&
-        this.record(session.id)?.project.mode === "enabled"
-      )
-        this.enqueue(async () => {
-          const r = this.record(session.id);
-          if (r?.project.mode === "enabled" && !r.project.modeLocked)
-            await this.update(session.id, (current) => ({
-              ...current,
-              project: { ...current.project, modeLocked: true },
-            }));
-        });
-      if (this.owner(session.id) && event.type === "turn/start")
-        this.progress.delete(session.id);
-      if (this.owner(session.id) && event.type === "turn/end") {
-        this.outbox.workerCuts.set(session.id, projected(this.ctx, session));
-        this.enqueue(() => this.ingest(session.id));
-      }
-      if (this.record(session.id) && event.type === "user/message") {
-        this.outbox.claimed.get(session.id)?.delete(event.data.id);
-        this.enqueue(() => this.consume(session.id, event.data.id));
-      }
-      if (this.record(session.id) && event.type === "turn/end") {
-        this.outbox.claimed.delete(session.id);
-        this.enqueue(() =>
-          this.freezeTurn(session.id, event.data.turn, event.data.reason.kind),
-        );
-      }
-      this.notify();
-    });
-    this.ctx.on("agent/turn-stopping", async ({ agent, turn, signal }) => {
-      if (this.record(agent.id)?.project.mode === "enabled")
-        await this.guardTurn(agent, turn, signal);
-    });
-    this.ctx.on("agent/pre-step", async ({ agent, signal }, next) => {
-      if (!this.record(agent.id)) return next();
-      const control = AbortSignal.any([signal, this.closing.signal]);
-      control.throwIfAborted();
-      this.outbox.normalizing.add(agent.id);
-      try {
-        const decision = await next();
-        control.throwIfAborted();
-        if (decision.kind !== "enter" || !this.record(agent.id))
-          return decision;
-        if (
-          this.record(agent.id)?.project.mode === "enabled" &&
-          decision.messages.some((m) => m.source.kind === "user")
-        ) {
-          await this.refreshWorkersForInput(
-            agent,
-            decision.messages
-              .filter((m) => m.source.kind === "user")
-              .map((m) => m.id),
-            control,
-          );
-        }
-        const claimed = this.outbox.claimed.get(agent.id) ?? new Set<string>();
-        this.outbox.claimed.set(agent.id, claimed);
-        for (const message of decision.messages)
-          if (message.source.kind === "project-mode-result")
-            claimed.add(message.id);
-        const managed = decision.messages.filter((m) => {
-          const source = m.source;
-          return (
-            source.kind === "subagent-settled" &&
-            this.record(agent.id)!.workers.some(
-              (w) => w.id === source.senderSessionId,
-            )
-          );
-        });
-
-        // A cold worker can settle before the native send receipt is persisted.
-        // Await only the already-running admission for that worker, without a
-        // worker lock, before replacing its native settlement notice.
-        for (const message of managed) {
-          if (message.source.kind !== "subagent-settled") continue;
-          for (const assignment of this.record(agent.id)!.assignments) {
-            if (assignment.workerId !== message.source.senderSessionId)
-              continue;
-            const admission = this.workers.operations.get(
-              JSON.stringify([agent.id, assignment.operationId]),
-            );
-            if (admission) await waitForTurn(admission, control);
-            control.throwIfAborted();
-          }
-        }
-        for (const message of managed) {
-          if (message.source.kind === "subagent-settled")
-            await waitForTurn(
-              this.ingest(message.source.senderSessionId),
-              control,
-            );
-          control.throwIfAborted();
-        }
-        control.throwIfAborted();
-        const messages = decision.messages.filter((m) => !managed.includes(m));
-        const r = this.record(agent.id)!;
-        for (const d of r.deliveries) {
-          if (
-            d.state !== "consumed" &&
-            d.state !== "suppressed" &&
-            !messages.some((m) => m.id === d.message.id)
-          ) {
-            agent.inbox.remove(d.message.id);
-            messages.push(freezeMessage(d.message));
-            claimed.add(d.message.id);
-          }
-        }
-        // Native tool-result continuation legitimately enters with no new
-        // messages. Only reject an empty step caused by removing duplicate
-        // managed settlements; otherwise preserve the native enter decision.
-        return managed.length > 0 && messages.length === 0
-          ? { kind: "reject" }
-          : { ...decision, messages };
-      } finally {
-        this.outbox.normalizing.delete(agent.id);
-      }
-    });
-    this.ctx.on("agent/disposed", ({ agent }) => {
-      this.workerInputSnapshots.delete(agent.id);
-      this.mounted.get(agent)?.dispose();
-      this.mounted.delete(agent);
+      recover: (id) => this.recover(id),
+      guardTurn: (agent, turn, signal) => this.guardTurn(agent, turn, signal),
+      freezeTurn: (id, turn, reason) => this.freezeTurn(id, turn, reason),
+      refreshWorkersForInput: (agent, ids, signal) =>
+        this.refreshWorkersForInput(agent, ids, signal),
     });
     this.ctx.effect(
       () => async () => {
@@ -550,6 +332,14 @@ export default class ProjectMode extends TypertRemoteService {
     )
       throw new Error("project-mode/unauthorized: Session access denied");
   }
+  private reconcileTools() {
+    if (this.closing.signal.aborted) return;
+    if (this.reconcilingTools) {
+      this.toolsChangedDuringReconciliation = true;
+      return;
+    }
+    for (const agent of this.ctx.agents.list()) this.attach(agent);
+  }
   private attach(agent: Agent) {
     const enabled = this.record(agent.id)?.project.mode === "enabled";
     if (this.reconcilingTools || this.closing.signal.aborted) return;
@@ -608,7 +398,6 @@ export default class ProjectMode extends TypertRemoteService {
     this.jobs = this.jobs
       .then(work)
       .catch((error) => {
-        this.errors.set("runtime", String(error));
         this.ctx.logger.warn(String(error));
       })
       .then(() => this.notify());
@@ -797,86 +586,25 @@ export default class ProjectMode extends TypertRemoteService {
     await this.jobs;
     const r = this.record(sessionId);
     if (!r) return null;
-    const members = r.workers.filter((w) => w.lifecycle !== "deleted"),
+    const members = r.workers.filter(isVisibleWorker),
       memberIds = new Set(members.map((w) => w.id)),
       workers = await Promise.all(members.map((w) => this.view(w))),
       agent = this.ctx.agents.get(sessionId),
       boundary = agent
         ? this.ctx.sessionProjections.stateOf(agent.session, "turnBoundary")!
         : undefined;
-    const turn = boundary?.lastTurn ?? 0;
-    const active =
-      boundary?.openTurnStartSeq !== null && boundary !== undefined;
-    const coordinatorTurn: CoordinatorTurnView | null = active
-      ? {
-          sessionId,
-          turn,
-          phase: this.turns.waiting.has(sessionId)
-            ? "waiting-workers"
-            : "working",
-          workerIds: [
-            ...new Set(
-              r.memberships
-                .filter(
-                  (m) =>
-                    m.coordinatorTurn === turn && memberIds.has(m.workerId),
-                )
-                .map((m) => SessionId(m.workerId)),
-            ),
-          ],
-          unresolvedOperationIds: r.assignments
-            .filter(
-              (a) => a.admission === "unknown" || a.admission === "prepared",
-            )
-            .map((a) => a.operationId),
-          pendingAssignmentIds: r.assignments
-            .filter(
-              (a) =>
-                a.admission !== "rejected" &&
-                !r.completions.some((c) => c.assignmentIds.includes(a.id)),
-            )
-            .map((a) => a.id),
-          runningWorkerIds: workers
-            .filter((w) => w.status === "busy")
-            .map((w) => w.workerId),
-          queuedWorkerIds: workers
-            .filter((w) => w.queueLength)
-            .map((w) => w.workerId),
-          undeliveredCompletionIds: r.deliveries
-            .filter((d) => d.state === "pending")
-            .map((d) => d.completionId),
-          unconsumedCompletionIds: r.deliveries
-            .filter((d) => d.state !== "consumed" && d.state !== "suppressed")
-            .map((d) => d.completionId),
-          pendingSteerCount: agent?.inbox.nextStep.length ?? 0,
-          revision: r.project.revision,
-        }
-      : null;
-    return {
-      project: {
-        ...r.project,
-        coordinatorSessionId: SessionId(r.project.coordinatorSessionId),
-      },
+    return buildProjectSnapshot({
+      sessionId,
+      record: r,
       workers,
-      turnMemberships: r.memberships
-        .filter((m) => memberIds.has(m.workerId))
-        .map((m) => ({
-          ...m,
-          coordinatorSessionId: SessionId(m.coordinatorSessionId),
-          workerId: SessionId(m.workerId),
-        })),
-      closedTurnOutcomes: r.outcomes
-        .filter((o) => memberIds.has(o.workerId))
-        .map((o) => ({
-          ...o,
-          coordinatorSessionId: SessionId(o.coordinatorSessionId),
-          workerId: SessionId(o.workerId),
-        })),
-      coordinatorTurn,
+      memberIds,
+      boundary,
+      waiting: this.turns.waiting.has(sessionId),
+      pendingSteerCount: agent?.inbox.nextStep.length ?? 0,
       streamEpoch: this.epoch,
-      revision: r.project.revision,
-    };
+    });
   }
+
   @Remote({ name: "follow", mode: "stream" })
   async *follow(
     sessionId: SessionId,
@@ -989,50 +717,7 @@ export default class ProjectMode extends TypertRemoteService {
   @Remote("mode")
   mode(sessionId: SessionId): SessionModeView {
     this.authorize(sessionId);
-    const worker = this.owner(sessionId),
-      r = this.record(sessionId),
-      agent = this.ctx.agents.get(sessionId);
-    const modeLocked = this.modeLocked(r, agent);
-    const blocked = worker
-      ? "worker-session"
-      : modeLocked
-        ? "session-mode-locked"
-        : !agent && !ordinarySessionResolver(this.ctx)
-          ? "runtime-unavailable"
-          : agent?.status === "running"
-            ? "agent-running"
-            : undefined;
-    return {
-      sessionId,
-      role: worker ? "worker" : r ? "coordinator" : "ordinary",
-      enabled: r?.project.mode === "enabled",
-      modeLocked,
-      revision: r?.project.revision ?? 0,
-      canToggle: !blocked,
-      ...(blocked ? { toggleBlockedReason: blocked } : {}),
-      ...(r ? { projectId: r.project.id, paths: r.project.paths } : {}),
-      ...(worker
-        ? {
-            projectId: worker.project.id,
-            coordinatorSessionId: SessionId(
-              worker.project.coordinatorSessionId,
-            ),
-          }
-        : {}),
-    };
-  }
-  private modeLocked(r: RecordState | undefined, agent?: Agent): boolean {
-    return (
-      r?.project.mode === "enabled" &&
-      // Treat an unmigrated enabled record as fixed until recovery proves it
-      // is a draft. Live history closes the gap before turn/start is persisted.
-      (r.project.modeLocked !== false ||
-        (!!agent &&
-          hasOwnTurn(
-            agent.session.snapshotEvents(),
-            agent.session.inheritedEventCount,
-          )))
-    );
+    return this.lifecycle.mode(sessionId);
   }
   @Remote("setEnabled")
   async setEnabled(
@@ -1042,142 +727,11 @@ export default class ProjectMode extends TypertRemoteService {
     requestId: string,
   ): Promise<SessionModeView> {
     this.authorize(sessionId);
-    if (!requestId) throw new Error("requestId required");
-    const old = this.record(sessionId);
-    if (old?.toggles[requestId] !== undefined) return this.mode(sessionId);
-    if (this.owner(sessionId)) throw new Error("project-mode/worker-session");
-    if (!enabled && this.modeLocked(old, this.ctx.agents.get(sessionId)))
-      throw new Error("project-mode/session-mode-locked");
-    if ((old?.project.revision ?? 0) !== expectedRevision)
-      throw new Error("project-mode/revision-conflict");
-    const agent = await resolveOrdinaryAgent(this.ctx, sessionId);
-    if (!agent) throw new Error("project-mode/runtime-unavailable");
-    if (this.owner(sessionId)) throw new Error("project-mode/worker-session");
-    if (!enabled && this.modeLocked(this.record(sessionId), agent))
-      throw new Error("project-mode/session-mode-locked");
-    if (agent.status !== "idle") throw new Error("project-mode/agent-running");
-    await agent.runMaintenance(async (signal) => {
-      let r = this.record(sessionId);
-      if (!enabled && this.modeLocked(r, agent))
-        throw new Error("project-mode/session-mode-locked");
-      if ((r?.project.revision ?? 0) !== expectedRevision)
-        throw new Error("project-mode/revision-conflict");
-      if (!enabled && r) {
-        if (
-          r.deliveries.some(
-            (d) => d.state !== "consumed" && d.state !== "suppressed",
-          )
-        )
-          throw new Error("project-mode/results-pending");
-        const views = await Promise.all(
-          r.workers
-            .filter(
-              (w) =>
-                w.lifecycle !== "deleted" && w.lifecycle !== "provision-failed",
-            )
-            .map((w) => this.view(w)),
-        );
-        if (
-          views.some(
-            (v) => v.status !== "idle" || v.queueLength || v.pendingSteerCount,
-          ) ||
-          r.assignments.some(
-            (a) => a.admission === "prepared" || a.admission === "unknown",
-          )
-        )
-          throw new Error("project-mode/workers-active");
-      }
-      if (!r) {
-        if (!enabled) return;
-        const cwd = await this.ctx.workingDirectory.ensure(agent, signal),
-          id = randomUUID(),
-          base = this.config.dataDirectory;
-        if (
-          isAbsolute(base) ||
-          relative(".", base).split(/[\\/]/).includes("..")
-        )
-          throw new Error("project-mode/invalid-directory");
-        const root = resolve(cwd, base, id),
-          paths = {
-            root,
-            context: resolve(root, "context"),
-            notes: resolve(root, "notes.md"),
-            archived: resolve(root, "archived.md"),
-          };
-        const presets = this.ctx.get("agentPresets");
-        const fs = presets?.serviceFor(agent, "fs") ?? agent.ctx.get("fs");
-        if (!fs) throw new Error("project-mode/filesystem-unavailable");
-        const cwdTarget = await fs.resolve(cwd);
-        const policy = (
-          presets?.serviceFor(agent, "sandboxPolicy") ??
-          agent.ctx.get("sandboxPolicy")
-        )?.resolve({ session: agent.session });
-        if (fs.sandboxMode && !policy)
-          throw new Error("project-mode/missing-filesystem-policy");
-        for (const [path, content] of [
-          [paths.notes, "# Active tasks\n"],
-          [paths.archived, "# Archived tasks\n"],
-          [contextIndexPath(paths), contextIndexTemplate],
-        ] as const) {
-          const target = await fs.resolve(path, { cwd, signal });
-          if (!fs.contains(cwdTarget, target))
-            throw new Error("project-mode/path-escape");
-          if ((await fs.stat(target, signal)) === undefined)
-            await fs.writeText(
-              target,
-              content,
-              { kind: "createIfAbsent" },
-              signal,
-              policy,
-            );
-        }
-        const now = Date.now();
-        r = {
-          project: {
-            version: 1,
-            id,
-            coordinatorSessionId: sessionId,
-            workspacePath: cwd,
-            paths,
-            mode: "disabled",
-            modeLocked: false,
-            revision: 0,
-            createdAt: now,
-            updatedAt: now,
-          },
-          workers: [],
-          assignments: [],
-          completions: [],
-          deliveries: [],
-          memberships: [],
-          outcomes: [],
-          operations: {},
-          toggles: {},
-          reminders: {},
-        };
-      }
-      r = {
-        ...r,
-        project: {
-          ...r.project,
-          mode: enabled ? "enabled" : "disabled",
-          modeLocked:
-            r.project.modeLocked === true ||
-            (enabled &&
-              hasOwnTurn(
-                agent.session.snapshotEvents(),
-                agent.session.inheritedEventCount,
-              )),
-          revision: r.project.revision + 1,
-          updatedAt: Date.now(),
-        },
-        toggles: { ...r.toggles, [requestId]: r.project.revision + 1 },
-      };
-      await this.domain.table("projects").put(sessionId, recordSchema.parse(r));
-      this.attach(agent);
-      if (this.record(agent.id)) this.enqueue(() => this.recover(agent.id));
-      this.notify();
-    });
-    return this.mode(sessionId);
+    return this.lifecycle.setEnabled(
+      sessionId,
+      enabled,
+      expectedRevision,
+      requestId,
+    );
   }
 }

@@ -2,19 +2,55 @@
 
 让一个持续负责项目的 Coordinator 管理 Workers、维护项目知识，并判断工作下一步该如何推进。
 
-[English](README.md) · [MOA 模型](docs/moa-architecture.md) · [代码架构](docs/architecture.md) · [贡献指南](CONTRIBUTING.md)
+[English](README.md) | 简体中文
 
-**开发预览版：v0.1.21。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，原版 rc.3 无法启用插件。安装前请先阅读[兼容说明](docs/compatibility.md)。
+**开发预览版：v0.1.22。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，原版 rc.3 无法启用插件。安装前请先阅读[兼容说明](docs/compatibility.md)。
 
-## 它做什么
+## 目录
 
-多个 Agent 一起工作时，通常需要人来决定如何分工、在对话之间传递上下文、追踪进度、审阅结果。Project Mode 将这份持续的协调职责交给项目主会话中的 Coordinator。
+- [核心能力](#核心能力)
+- [快速开始](#快速开始)
+- [使用指南](#使用指南)
+- [项目记忆](#项目记忆)
+- [DSH 界面功能](#dsh-界面功能)
+- [项目结构](#项目结构)
+- [开发](#开发)
+- [API 与文档](#api-与文档)
+- [当前限制](#当前限制)
+- [许可证](#许可证)
 
-Coordinator 通过 `control_workers` 管理可持续交流的 Worker 会话。它可以派生或复用 Worker、引导当前工作、排队下发后续指令、查看对话、打断执行或从项目中删除 Worker。它审阅结果，再决定继续、调整分工还是收口。
+## 核心能力
 
-执行使用 DSH 原生的 Session、Agent Loop、工具、权限和消息投递。插件提供项目协调能力，并增加少量界面入口。
+Project Mode 将多 Agent 项目中的协调工作交给主会话中持续负责项目的 Coordinator。用户提出目标，它选择 Workers、跟进进度、审阅结果，让项目知识在后续任务中继续发挥作用。
 
-## 人、Coordinator 和 Worker 如何协作
+| 能力 | 带来的帮助 |
+| --- | --- |
+| 持续协调 | 同一个 Coordinator 会话维护项目工作记录，判断下一步。 |
+| 完整的 Worker 控制 | 派生或复用 Worker、引导当前工作、排队下发后续指令、查看状态与历史、打断或删除。 |
+| 共享项目知识 | Coordinator 与 Workers 共同维护索引，按需渐进加载上下文。 |
+| 自动返回结果 | Worker 每轮结束后自动返回完整的最终 AI 消息，交给 Coordinator 审阅。 |
+| 用户直接参与 | 进入 Worker 直接引导工作，再返回 Coordinator 继续协调。 |
+| DSH 原生执行 | Session、Agent Loop、工具、权限、消息投递和 Stop 均由 DSH 承担。 |
+
+## 快速开始
+
+1. 按[兼容说明](docs/compatibility.md)准备 DSH **0.2.1-rc.3**，包含以下三个显式扩展：
+   - Agent 作用域内可撤销的 `tools.suppress({ deny })`。
+   - 会话级 `conversation.submission.register(sessionId, "steer")`。
+   - 用于原生父子会话行的 `sidebar.workspaces.session.branch`。
+2. 通过该运行时的 CLI 安装指定版本：
+
+```sh
+dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.22"
+```
+
+各版本安装包见 [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases)。
+
+在 DSH 插件页启用插件，打开工作区，新建会话，并在发送第一条消息前选择 **Project**。
+
+仓库已包含 Git 安装所需的构建产物。没有自动修改应用的安装钩子，也没有发布到 npm。给本仓库开发依赖打补丁，不会同时修改已安装的 DSH 应用；打包后的 Desktop 需要单独准备兼容运行时。兼容文档说明了显式补丁脚本、版本校验以及备份和恢复方式。
+
+## 使用指南
 
 | 角色 | 职责 |
 | --- | --- |
@@ -50,7 +86,7 @@ Coordinator 通过 `control_workers` 管理可持续交流的 Worker 会话。�
 
 这些文件随项目持续积累，采用渐进式加载，不会在每次请求中全量展开。详细职责见 [MOA 模型](docs/moa-architecture.md)。
 
-## 在 DSH 中使用
+## DSH 界面功能
 
 - 新建会话，在发送第一条消息前选择 **Project**。首次 turn 启动后，Project 身份固定。
 - 在原生工作区侧栏展开 Coordinator，打开其 Workers。每个 Worker 都有稳定的身份图标和当前状态。
@@ -60,19 +96,19 @@ Coordinator 通过 `control_workers` 管理可持续交流的 Worker 会话。�
 
 原生派生和控制工具仅在 Coordinator 的 Agent 作用域中替换，Workers 与普通会话保留原生工具组合。Stop 保持可用，不会自动停止所有 Workers。
 
-## 安装
+## 项目结构
 
-先按[兼容说明](docs/compatibility.md)准备实际要使用的 DSH 运行时，再通过该运行时的 CLI 安装指定版本：
-
-```sh
-dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.21"
+```text
+packages/project-mode/
+├── src/host/       项目生命周期、Worker 操作和结果投递
+├── src/client/     侧栏、胶囊和项目页签
+├── src/shared/     共享类型与接口契约
+└── lib/            插件构建产物
+compat/rc3/         经审计的运行时兼容补丁
+scripts/            构建、兼容和验证脚本
+tests/              回归与原生接口测试
+docs/               模型、架构、API 和验证文档
 ```
-
-也可以安装 [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases/tag/v0.1.21) 中的 `dsh-plugin-project-mode-0.1.21-npm.tgz`。
-
-在 DSH 插件页启用插件，打开工作区，新建会话，并在发送第一条消息前选择 **Project**。
-
-仓库已包含 Git 安装所需的构建产物。没有自动修改应用的安装钩子，也没有发布到 npm。给本仓库开发依赖打补丁，不会同时修改已安装的 DSH 应用；打包后的 Desktop 需要单独准备兼容运行时。兼容文档说明了显式补丁脚本、版本校验以及备份和恢复方式。
 
 ## 开发
 
@@ -89,6 +125,10 @@ npm test -- --maxWorkers=1
 
 `npm test` 会先构建插件。修改 `packages/project-mode/src`，通过构建重新生成并提交 `lib` 产物。类型检查、原生接口测试、安装包验证和测试地图见[贡献指南](CONTRIBUTING.md)。
 
+## API 与文档
+
+Coordinator 通过 `control_workers` 使用 `spawn`、`list`、`get`、`send`、`history`、`interrupt` 和 `delete`。`send` 区分引导当前工作的 **steer** 与留待下一轮处理的 **queue**。参数、示例和结果语义见工具 API。
+
 | 文档 | 内容 |
 | --- | --- |
 | [MOA 模型](docs/moa-architecture.md) | 角色职责与渐进式共享上下文 |
@@ -100,8 +140,6 @@ npm test -- --maxWorkers=1
 ## 当前限制
 
 分工仍由模型判断，预览版不保证每次都作出理想选择，也不使用任务关键词、命令次数或时间阈值强迫派发。
-
-目前仍有错误隔离和 Worker 列表一致性问题，详见[当前维护欠账](docs/architecture.md#current-maintenance-debt)。[验证记录](docs/verification.md)区分了已确认的问题和发行时通过的检查。
 
 ## 许可证
 

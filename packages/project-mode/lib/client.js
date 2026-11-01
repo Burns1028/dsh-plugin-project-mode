@@ -1658,7 +1658,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 908,
+						"line": 636,
 						"column": 9
 					}
 				},
@@ -1936,7 +1936,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 924,
+						"line": 652,
 						"column": 9
 					}
 				},
@@ -2407,7 +2407,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 881,
+						"line": 609,
 						"column": 10
 					}
 				},
@@ -2544,7 +2544,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 936,
+						"line": 664,
 						"column": 9
 					}
 				},
@@ -2632,7 +2632,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 990,
+						"line": 718,
 						"column": 3
 					}
 				},
@@ -2770,7 +2770,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 1038,
+						"line": 723,
 						"column": 9
 					}
 				},
@@ -3231,7 +3231,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 795,
+						"line": 584,
 						"column": 9
 					}
 				},
@@ -3416,7 +3416,7 @@ window.__ModuleLoader__.load({
 					},
 					sourceLocation: {
 						"file": "packages/project-mode/src/host/index.ts",
-						"line": 959,
+						"line": 687,
 						"column": 10
 					}
 				}
@@ -3890,6 +3890,11 @@ window.__ModuleLoader__.load({
 				reason: mode.error || client.catalogState === "error" || mode.value?.role === "worker" && client.catalogState === "ready" ? "unavailable" : "pending"
 			};
 		}
+		// src/shared/worker-membership.ts
+		/** Public membership excludes removed Workers and creation-only placeholders. */
+		function isVisibleWorker(worker) {
+			return worker.lifecycle !== "deleted" && worker.lifecycle !== "provision-failed";
+		}
 		// src/client/worker-icon.tsx
 		const colors = [
 			"#639fe8",
@@ -4122,7 +4127,7 @@ window.__ModuleLoader__.load({
 			const { tab } = useTabInfo();
 			const [chosen, choose] = react.useState();
 			const axisRef = react.useRef(null);
-			const workers = (project?.workers ?? []).filter((worker) => worker.lifecycle !== "deleted" && worker.lifecycle !== "provision-failed"), worker = workers.find((w) => w.workerId === chosen) ?? workers[0];
+			const workers = (project?.workers ?? []).filter(isVisibleWorker), worker = workers.find((w) => w.workerId === chosen) ?? workers[0];
 			const [windowSize, setWindowSize] = react.useState(10), [retry, setRetry] = react.useState(0);
 			const [state, setState] = react.useState();
 			const labels = react.useMemo(() => ({
@@ -4638,7 +4643,7 @@ window.__ModuleLoader__.load({
 		/** Add only the disclosure and children; DSH renders every row and the browser. */
 		function ProjectBranch(p) {
 			const archived = p.useWorkspaces((state) => state.archivedSessionIds);
-			const workers = useSelected(p.client.store.subscribe, () => (p.client.store.project(p.sessionId)?.workers ?? []).filter((w) => w.lifecycle !== "deleted" && w.lifecycle !== "provision-failed" && !archived.includes(w.workerId)).map(({ workerId, name, phase }) => ({
+			const workers = useSelected(p.client.store.subscribe, () => (p.client.store.project(p.sessionId)?.workers ?? []).filter((w) => isVisibleWorker(w) && !archived.includes(w.workerId)).map(({ workerId, name, phase }) => ({
 				workerId,
 				name,
 				phase
@@ -4736,7 +4741,7 @@ window.__ModuleLoader__.load({
 			let key;
 			let remove = () => {};
 			const reconcile = () => {
-				const ids = client.store.projects().filter((p) => p.workers.some((w) => w.lifecycle !== "deleted" && w.lifecycle !== "provision-failed")).map((p) => p.project.coordinatorSessionId).sort();
+				const ids = client.store.projects().filter((p) => p.workers.some((w) => isVisibleWorker(w))).map((p) => p.project.coordinatorSessionId).sort();
 				const next = JSON.stringify(ids);
 				if (key === next) return;
 				key = next;

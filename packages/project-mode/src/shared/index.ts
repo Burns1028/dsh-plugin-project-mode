@@ -6,6 +6,7 @@ export interface ProjectPaths {
   notes: string;
   archived: string;
 }
+/** Public Project metadata, not the full persisted Host aggregate. */
 export interface ProjectRecord {
   version: 1;
   id: string;
@@ -38,6 +39,7 @@ export interface SessionModeView {
     | "worker-session"
     | "runtime-unavailable";
 }
+/** Derived observation for tools/UI; lifecycle is membership, status is native activity. */
 export interface WorkerView {
   workerId: SessionId;
   name: string;
@@ -130,6 +132,7 @@ export interface CoordinatorTurnView {
   pendingSteerCount: number;
   revision: number;
 }
+/** Complete read model sent to Clients; never a second scheduling source. */
 export interface ProjectSnapshot {
   project: ProjectRecord;
   workers: WorkerView[];

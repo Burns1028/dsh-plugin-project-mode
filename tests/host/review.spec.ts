@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { SessionId } from "@deepseek-ai/dsh-session";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import ProjectMode from "../../packages/project-mode/src/host/index.ts";
@@ -70,7 +70,18 @@ it("records native capacity rejection as failed provisioning and lets the admitt
         const snapshot = await f.ctx.projectMode.snapshot(agent.id);
         expect(
           snapshot?.workers.find((w) => w.name === "overflow"),
-        ).toMatchObject({ lifecycle: "provision-failed", phase: "failed" });
+        ).toBeUndefined();
+        const listed = (await f.ctx.projectMode.controlForAgent(
+          agent,
+          { action: "list" },
+          "list-after-rejection",
+          signal,
+        )) as import("../../packages/project-mode/src/shared/index.ts").WorkerView[];
+        expect(listed.map((w) => w.name)).toEqual(["accepted"]);
+        const failed = (f.ctx.projectMode as any)
+          .record(agent.id)
+          .workers.find((w: { name: string }) => w.name === "overflow");
+        expect(failed).toMatchObject({ lifecycle: "provision-failed" });
         expect(await f.ctx.subagents.listChildren(agent.id)).toHaveLength(1);
         await expect(
           f.ctx.projectMode.controlForAgent(
@@ -80,10 +91,9 @@ it("records native capacity rejection as failed provisioning and lets the admitt
             signal,
           ),
         ).rejects.toMatchObject({ code: "ACTIVATION_LIMIT_REACHED" });
-        const failed = snapshot!.workers.find((w) => w.name === "overflow")!;
         await f.ctx.projectMode.controlForAgent(
           agent,
-          { action: "delete", worker_id: failed.workerId },
+          { action: "delete", worker_id: SessionId(failed.id) },
           "delete-rejected",
           signal,
         );
@@ -254,6 +264,58 @@ it("retains uncertainty for an error thrown after a real native admission and re
     await agent.whenIdle();
   } finally {
     release();
+    await f.dispose();
+  }
+});
+
+it("keeps an existing Worker visible when its native execution fails", async () => {
+  const f = await fixture();
+  try {
+    const { agent } = await f.ctx.agents.create({
+      sessionId: SessionId("failed-execution-parent"),
+      meta: { cwd: f.root },
+      agentOptions: { provider: "test", model: "test" },
+    });
+    await f.ctx.projectMode.setEnabled(agent.id, true, 0, "on");
+    f.adapter.handler = (request) => {
+      if (request.sessionId !== agent.id)
+        throw new Error("worker execution failed");
+      return response("reviewed failure");
+    };
+    const signal = new AbortController().signal;
+    const receipt = (await f.ctx.projectMode.controlForAgent(
+      agent,
+      { action: "spawn", name: "real-worker", task: "work" },
+      "spawn",
+      signal,
+    )) as { workerId: ReturnType<typeof SessionId> };
+    await vi.waitFor(async () => {
+      const snapshot = await f.ctx.projectMode.snapshot(agent.id);
+      expect(
+        snapshot!.workers.find((w) => w.workerId === receipt.workerId)?.phase,
+      ).toBe("failed");
+    });
+    await agent.whenIdle();
+    const listed = (await f.ctx.projectMode.controlForAgent(
+      agent,
+      { action: "list" },
+      "list",
+      signal,
+    )) as import("../../packages/project-mode/src/shared/index.ts").WorkerView[];
+    expect(listed).toEqual([
+      expect.objectContaining({
+        workerId: receipt.workerId,
+        lifecycle: "active",
+        phase: "failed",
+      }),
+    ]);
+    expect((await f.ctx.projectMode.snapshot(agent.id))!.workers).toEqual([
+      expect.objectContaining({
+        workerId: receipt.workerId,
+        lifecycle: "active",
+      }),
+    ]);
+  } finally {
     await f.dispose();
   }
 });

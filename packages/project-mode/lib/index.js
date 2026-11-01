@@ -1,15 +1,15 @@
-import { SessionId, SessionSeq, snapshotSessionEvent } from "@deepseek-ai/dsh-session";
 import { MessageId, createUserMessage, freezeMessage } from "@deepseek-ai/dsh-llm";
 import { SubagentError } from "@deepseek-ai/dsh-subagent";
 import { queueHostSubagentPrompt, steerHostSubagentPrompt } from "@deepseek-ai/dsh-subagent/internal";
 import { z } from "zod";
 import { defineDomain, domainTable } from "@deepseek-ai/dsh-storage-domain";
-import { isDeepStrictEqual } from "node:util";
+import { SessionId, SessionSeq, snapshotSessionEvent } from "@deepseek-ai/dsh-session";
+import { isAbsolute, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import { defineTool } from "@deepseek-ai/dsh-tools";
 import { Service } from "@deepseek-ai/cordis";
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
-import { defineTool } from "@deepseek-ai/dsh-tools";
-import { isAbsolute, relative, resolve } from "node:path";
 import z$1 from "@deepseek-ai/schemastery";
 // src/host/state.ts
 const id = z.string().min(1);
@@ -397,6 +397,333 @@ async function resolveOrdinaryAgent(ctx, sessionId) {
 	if ("error" in result) throw result.error;
 	return result.agent;
 }
+// src/host/project-memory.ts
+const contextIndexTemplate = "# Project context\n\nRead this shared index first, then open only the context files needed for the task. Coordinator and Workers maintain reusable project knowledge here. Workers contribute valuable reusable findings; the Coordinator primarily organizes, consolidates and prunes context. Keep each entry's path and short description current.\n\n## Context files\n";
+const contextIndexPath = (paths) => resolve(paths.context, "context.md");
+/** Backfill only a missing index through the acting Agent's native filesystem. */
+async function ensureContextIndex(ctx, agent, project, signal) {
+	const presets = ctx.get("agentPresets");
+	const fs = presets?.serviceFor(agent, "fs") ?? agent.ctx.get("fs");
+	if (!fs) throw new Error("project-mode/filesystem-unavailable");
+	const cwd = project.workspacePath;
+	const workspace = await fs.resolve(cwd, { signal });
+	const index = await fs.resolve(contextIndexPath(project.paths), {
+		cwd,
+		signal
+	});
+	if (!fs.contains(workspace, index)) throw new Error("project-mode/path-escape");
+	if (await fs.stat(index, signal)) return;
+	const directory = await fs.resolve(project.paths.context, {
+		cwd,
+		signal
+	});
+	const links = (await fs.stat(directory, signal) ? await fs.listDir(directory, signal) : []).filter((e) => e.name !== "context.md" && (e.type === "file" || e.type === "directory")).map((e) => {
+		const name = e.name.replace(/[\[\]\\]/g, "\\$&");
+		const href = encodeURIComponent(e.name).replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
+		return `- [${name}${e.type === "directory" ? "/" : ""}](./${href}) — Existing context ${e.type === "directory" ? "folder" : "file"}; add a short description.\n`;
+	}).join("");
+	const policy = (presets?.serviceFor(agent, "sandboxPolicy") ?? agent.ctx.get("sandboxPolicy"))?.resolve({ session: agent.session });
+	if (fs.sandboxMode && !policy) throw new Error("project-mode/missing-filesystem-policy");
+	await fs.writeText(index, contextIndexTemplate + links, { kind: "createIfAbsent" }, signal, policy);
+}
+// src/host/agent-events.ts
+/** Bind native lifecycle notifications in their original registration order. */
+function bindAgentEvents(host, options) {
+	const { outbox, workers, progress } = options;
+	host.ctx.on("agent/pre-step", async ({ agent, signal }, next) => {
+		const decision = await next();
+		const project = host.record(agent.id) ?? host.owner(agent.id);
+		if (decision.kind !== "enter" || project?.project.mode !== "enabled" || !decision.messages.some((m) => [
+			"user",
+			"project-mode-assignment",
+			"project-mode-result",
+			"subagent-settled",
+			"agent-message"
+		].includes(m.source.kind))) return decision;
+		const control = AbortSignal.any([signal, host.closing.signal]);
+		try {
+			await ensureContextIndex(host.ctx, agent, project.project, control);
+		} catch (error) {
+			control.throwIfAborted();
+			host.ctx.logger.warn(`project-mode: context index: ${String(error)}`);
+		}
+		return decision;
+	});
+	host.ctx.on("tools/change", options.reconcileTools);
+	host.ctx.on("agent/created", async ({ agent }) => {
+		options.attach(agent);
+		if (host.record(agent.id)) host.enqueue(() => options.recover(agent.id));
+		host.notify();
+	});
+	host.ctx.on("agent/status", () => host.notify());
+	host.ctx.on("agent/assistant-stream", ({ agent, frame }) => {
+		if (!host.owner(agent.id)) return;
+		if (frame.type === "start") progress.delete(agent.id);
+		if (frame.type === "chunk" && frame.chunk.type === "text-delta") progress.set(agent.id, ((progress.get(agent.id) ?? "") + frame.chunk.text).slice(-host.config.progressTextMaxChars));
+		host.notify();
+	});
+	host.ctx.on("agent/inbox/inserted", () => host.notify());
+	host.ctx.on("session/event", (session, event) => {
+		if (event.type === "turn/start" && host.record(session.id)?.project.mode === "enabled") host.enqueue(async () => {
+			const r = host.record(session.id);
+			if (r?.project.mode === "enabled" && !r.project.modeLocked) await host.update(session.id, (current) => ({
+				...current,
+				project: {
+					...current.project,
+					modeLocked: true
+				}
+			}));
+		});
+		if (host.owner(session.id) && event.type === "turn/start") progress.delete(session.id);
+		if (host.owner(session.id) && event.type === "turn/end") {
+			outbox.workerCuts.set(session.id, projected(host.ctx, session));
+			host.enqueue(() => host.ingest(session.id));
+		}
+		if (host.record(session.id) && event.type === "user/message") {
+			outbox.claimed.get(session.id)?.delete(event.data.id);
+			host.enqueue(() => outbox.consume(session.id, event.data.id));
+		}
+		if (host.record(session.id) && event.type === "turn/end") {
+			outbox.claimed.delete(session.id);
+			host.enqueue(() => options.freezeTurn(session.id, event.data.turn, event.data.reason.kind));
+		}
+		host.notify();
+	});
+	host.ctx.on("agent/turn-stopping", async ({ agent, turn, signal }) => {
+		if (host.record(agent.id)?.project.mode === "enabled") await options.guardTurn(agent, turn, signal);
+	});
+	host.ctx.on("agent/pre-step", ({ agent, signal }, next) => normalizeCoordinatorStep(host, options, agent, signal, next));
+	host.ctx.on("agent/disposed", ({ agent }) => options.disposeAgent(agent));
+}
+/** Replace managed native settlements with canonical persisted Project results. */
+async function normalizeCoordinatorStep(host, options, agent, signal, next) {
+	const { outbox, workers } = options;
+	if (!host.record(agent.id)) return next();
+	const control = AbortSignal.any([signal, host.closing.signal]);
+	control.throwIfAborted();
+	outbox.normalizing.add(agent.id);
+	try {
+		const decision = await next();
+		control.throwIfAborted();
+		if (decision.kind !== "enter" || !host.record(agent.id)) return decision;
+		if (host.record(agent.id)?.project.mode === "enabled" && decision.messages.some((m) => m.source.kind === "user")) await options.refreshWorkersForInput(agent, decision.messages.filter((m) => m.source.kind === "user").map((m) => m.id), control);
+		const claimed = outbox.claimed.get(agent.id) ?? /* @__PURE__ */ new Set();
+		outbox.claimed.set(agent.id, claimed);
+		for (const message of decision.messages) if (message.source.kind === "project-mode-result") claimed.add(message.id);
+		const managed = decision.messages.filter((m) => {
+			const source = m.source;
+			return source.kind === "subagent-settled" && host.record(agent.id).workers.some((w) => w.id === source.senderSessionId);
+		});
+		for (const message of managed) {
+			if (message.source.kind !== "subagent-settled") continue;
+			for (const assignment of host.record(agent.id).assignments) {
+				if (assignment.workerId !== message.source.senderSessionId) continue;
+				const admission = workers.operations.get(JSON.stringify([agent.id, assignment.operationId]));
+				if (admission) await waitForTurn(admission, control);
+				control.throwIfAborted();
+			}
+		}
+		for (const message of managed) {
+			if (message.source.kind === "subagent-settled") await waitForTurn(host.ingest(message.source.senderSessionId), control);
+			control.throwIfAborted();
+		}
+		control.throwIfAborted();
+		const messages = decision.messages.filter((m) => !managed.includes(m));
+		const r = host.record(agent.id);
+		for (const d of r.deliveries) if (d.state !== "consumed" && d.state !== "suppressed" && !messages.some((m) => m.id === d.message.id)) {
+			agent.inbox.remove(d.message.id);
+			messages.push(freezeMessage(d.message));
+			claimed.add(d.message.id);
+		}
+		return managed.length > 0 && messages.length === 0 ? { kind: "reject" } : {
+			...decision,
+			messages
+		};
+	} finally {
+		outbox.normalizing.delete(agent.id);
+	}
+}
+// src/host/project-views.ts
+/** Assemble a transport view from already-observed native and durable facts. */
+function buildProjectSnapshot({ sessionId, record: r, workers, memberIds, boundary, waiting, pendingSteerCount, streamEpoch }) {
+	const turn = boundary?.lastTurn ?? 0;
+	const coordinatorTurn = boundary?.openTurnStartSeq !== null && boundary !== void 0 ? {
+		sessionId,
+		turn,
+		phase: waiting ? "waiting-workers" : "working",
+		workerIds: [...new Set(r.memberships.filter((m) => m.coordinatorTurn === turn && memberIds.has(m.workerId)).map((m) => SessionId(m.workerId)))],
+		unresolvedOperationIds: r.assignments.filter((a) => a.admission === "unknown" || a.admission === "prepared").map((a) => a.operationId),
+		pendingAssignmentIds: r.assignments.filter((a) => a.admission !== "rejected" && !r.completions.some((c) => c.assignmentIds.includes(a.id))).map((a) => a.id),
+		runningWorkerIds: workers.filter((w) => w.status === "busy").map((w) => w.workerId),
+		queuedWorkerIds: workers.filter((w) => w.queueLength).map((w) => w.workerId),
+		undeliveredCompletionIds: r.deliveries.filter((d) => d.state === "pending").map((d) => d.completionId),
+		unconsumedCompletionIds: r.deliveries.filter((d) => d.state !== "consumed" && d.state !== "suppressed").map((d) => d.completionId),
+		pendingSteerCount,
+		revision: r.project.revision
+	} : null;
+	return {
+		project: {
+			...r.project,
+			coordinatorSessionId: SessionId(r.project.coordinatorSessionId)
+		},
+		workers,
+		turnMemberships: r.memberships.filter((m) => memberIds.has(m.workerId)).map((m) => ({
+			...m,
+			coordinatorSessionId: SessionId(m.coordinatorSessionId),
+			workerId: SessionId(m.workerId)
+		})),
+		closedTurnOutcomes: r.outcomes.filter((o) => memberIds.has(o.workerId)).map((o) => ({
+			...o,
+			coordinatorSessionId: SessionId(o.coordinatorSessionId),
+			workerId: SessionId(o.workerId)
+		})),
+		coordinatorTurn,
+		streamEpoch,
+		revision: r.project.revision
+	};
+}
+// src/shared/worker-membership.ts
+/** Public membership excludes removed Workers and creation-only placeholders. */
+function isVisibleWorker(worker) {
+	return worker.lifecycle !== "deleted" && worker.lifecycle !== "provision-failed";
+}
+// src/host/project-lifecycle.ts
+function hasOwnTurn(events, inheritedEventCount) {
+	return events.some((event) => event.type === "turn/start" && event.seq >= inheritedEventCount);
+}
+/** Owns Project identity and draft enable/disable through native Agent maintenance. */
+var ProjectLifecycle = class {
+	host;
+	options;
+	constructor(host, options) {
+		this.host = host;
+		this.options = options;
+	}
+	mode(sessionId) {
+		const worker = this.host.owner(sessionId), r = this.host.record(sessionId), agent = this.host.ctx.agents.get(sessionId);
+		const modeLocked = this.modeLocked(r, agent);
+		const blocked = worker ? "worker-session" : modeLocked ? "session-mode-locked" : !agent && !ordinarySessionResolver(this.host.ctx) ? "runtime-unavailable" : agent?.status === "running" ? "agent-running" : void 0;
+		return {
+			sessionId,
+			role: worker ? "worker" : r ? "coordinator" : "ordinary",
+			enabled: r?.project.mode === "enabled",
+			modeLocked,
+			revision: r?.project.revision ?? 0,
+			canToggle: !blocked,
+			...blocked ? { toggleBlockedReason: blocked } : {},
+			...r ? {
+				projectId: r.project.id,
+				paths: r.project.paths
+			} : {},
+			...worker ? {
+				projectId: worker.project.id,
+				coordinatorSessionId: SessionId(worker.project.coordinatorSessionId)
+			} : {}
+		};
+	}
+	modeLocked(r, agent) {
+		return r?.project.mode === "enabled" && (r.project.modeLocked !== false || !!agent && hasOwnTurn(agent.session.snapshotEvents(), agent.session.inheritedEventCount));
+	}
+	async setEnabled(sessionId, enabled, expectedRevision, requestId) {
+		if (!requestId) throw new Error("requestId required");
+		const old = this.host.record(sessionId);
+		if (old?.toggles[requestId] !== void 0) return this.mode(sessionId);
+		if (this.host.owner(sessionId)) throw new Error("project-mode/worker-session");
+		if (!enabled && this.modeLocked(old, this.host.ctx.agents.get(sessionId))) throw new Error("project-mode/session-mode-locked");
+		if ((old?.project.revision ?? 0) !== expectedRevision) throw new Error("project-mode/revision-conflict");
+		const agent = await resolveOrdinaryAgent(this.host.ctx, sessionId);
+		if (!agent) throw new Error("project-mode/runtime-unavailable");
+		if (this.host.owner(sessionId)) throw new Error("project-mode/worker-session");
+		if (!enabled && this.modeLocked(this.host.record(sessionId), agent)) throw new Error("project-mode/session-mode-locked");
+		if (agent.status !== "idle") throw new Error("project-mode/agent-running");
+		await agent.runMaintenance(async (signal) => {
+			let r = this.host.record(sessionId);
+			if (!enabled && this.modeLocked(r, agent)) throw new Error("project-mode/session-mode-locked");
+			if ((r?.project.revision ?? 0) !== expectedRevision) throw new Error("project-mode/revision-conflict");
+			if (!enabled && r) await this.requireCanDisable(r);
+			if (!r) {
+				if (!enabled) return;
+				r = await this.createRecord(agent, signal);
+			}
+			r = {
+				...r,
+				project: {
+					...r.project,
+					mode: enabled ? "enabled" : "disabled",
+					modeLocked: r.project.modeLocked === true || enabled && hasOwnTurn(agent.session.snapshotEvents(), agent.session.inheritedEventCount),
+					revision: r.project.revision + 1,
+					updatedAt: Date.now()
+				},
+				toggles: {
+					...r.toggles,
+					[requestId]: r.project.revision + 1
+				}
+			};
+			await this.options.put(sessionId, recordSchema.parse(r));
+			this.options.attach(agent);
+			if (this.host.record(agent.id)) this.host.enqueue(() => this.options.recover(agent.id));
+			this.host.notify();
+		});
+		return this.mode(sessionId);
+	}
+	async requireCanDisable(r) {
+		if (r.deliveries.some((d) => d.state !== "consumed" && d.state !== "suppressed")) throw new Error("project-mode/results-pending");
+		if ((await Promise.all(r.workers.filter(isVisibleWorker).map((w) => this.host.view(w)))).some((v) => v.status !== "idle" || v.queueLength || v.pendingSteerCount) || r.assignments.some((a) => a.admission === "prepared" || a.admission === "unknown")) throw new Error("project-mode/workers-active");
+	}
+	async createRecord(agent, signal) {
+		const sessionId = agent.id;
+		const cwd = await this.host.ctx.workingDirectory.ensure(agent, signal), id = randomUUID(), base = this.host.config.dataDirectory;
+		if (isAbsolute(base) || relative(".", base).split(/[\\/]/).includes("..")) throw new Error("project-mode/invalid-directory");
+		const root = resolve(cwd, base, id), paths = {
+			root,
+			context: resolve(root, "context"),
+			notes: resolve(root, "notes.md"),
+			archived: resolve(root, "archived.md")
+		};
+		const presets = this.host.ctx.get("agentPresets");
+		const fs = presets?.serviceFor(agent, "fs") ?? agent.ctx.get("fs");
+		if (!fs) throw new Error("project-mode/filesystem-unavailable");
+		const cwdTarget = await fs.resolve(cwd);
+		const policy = (presets?.serviceFor(agent, "sandboxPolicy") ?? agent.ctx.get("sandboxPolicy"))?.resolve({ session: agent.session });
+		if (fs.sandboxMode && !policy) throw new Error("project-mode/missing-filesystem-policy");
+		for (const [path, content] of [
+			[paths.notes, "# Active tasks\n"],
+			[paths.archived, "# Archived tasks\n"],
+			[contextIndexPath(paths), contextIndexTemplate]
+		]) {
+			const target = await fs.resolve(path, {
+				cwd,
+				signal
+			});
+			if (!fs.contains(cwdTarget, target)) throw new Error("project-mode/path-escape");
+			if (await fs.stat(target, signal) === void 0) await fs.writeText(target, content, { kind: "createIfAbsent" }, signal, policy);
+		}
+		const now = Date.now();
+		return {
+			project: {
+				version: 1,
+				id,
+				coordinatorSessionId: sessionId,
+				workspacePath: cwd,
+				paths,
+				mode: "disabled",
+				modeLocked: false,
+				revision: 0,
+				createdAt: now,
+				updatedAt: now
+			},
+			workers: [],
+			assignments: [],
+			completions: [],
+			deliveries: [],
+			memberships: [],
+			outcomes: [],
+			operations: {},
+			toggles: {},
+			reminders: {}
+		};
+	}
+};
 // src/host/capsule-participation.ts
 /** Existing tool operation identity carries the committed root call's seq. */
 function nativeOperationSeq(operationId, sessionId) {
@@ -810,7 +1137,6 @@ var CompletionOutbox = class {
 						lastError: void 0
 					} : x)
 				}));
-				this.host.errors.delete(parentId);
 			} catch (error) {
 				await this.host.update(parentId, (r) => ({
 					...r,
@@ -824,7 +1150,6 @@ var CompletionOutbox = class {
 					this.retries.delete(parentId);
 					this.host.enqueue(() => this.deliver(parentId));
 				}, Math.min(this.host.config.retryMaxDelayMs, this.host.config.retryInitialDelayMs * 2 ** d.attempts)));
-				this.host.errors.set(parentId, String(error));
 				this.host.notify();
 			}
 		}
@@ -867,6 +1192,64 @@ const controlSchema = z.discriminatedUnion("action", [
 	}),
 	historySchema
 ]);
+/** Tool definition is separate from Agent-scoped registration and suppression. */
+function createWorkerControlTool(control) {
+	return defineTool({
+		name: "control_workers",
+		description: "Delegate tasks to workers with the same native tools and skills. spawn starts independent execution; send continues it; list/get/history inspect; interrupt/delete manage lifecycle. When waiting for workers, yield your response; results resume this coordinator turn automatically.",
+		parameters: {
+			action: {
+				type: "string",
+				required: true,
+				description: "Action: spawn, list, send, get, history, interrupt, delete"
+			},
+			name: {
+				type: "string",
+				description: "Worker name"
+			},
+			task: {
+				type: "string",
+				description: "Initial task"
+			},
+			worker_id: {
+				type: "string",
+				description: "Worker session id"
+			},
+			message: {
+				type: "string",
+				description: "Follow-up"
+			},
+			delivery: {
+				type: "string",
+				enum: ["steer", "queue"],
+				description: "Immediate step or next turn"
+			},
+			offset: {
+				type: "integer",
+				description: "History index from newest (0 = latest visible message)"
+			},
+			limit: {
+				type: "integer",
+				description: "History window length; returns user/assistant messages newest first"
+			},
+			task_ref: {
+				type: "string",
+				description: "Task reference"
+			}
+		},
+		output: {
+			schema: { type: "string" },
+			render: (_a, value) => [{
+				type: "text",
+				text: value
+			}]
+		},
+		execute: async (args, exec) => {
+			if (!exec.agent) throw new Error("project-mode/not-coordinator");
+			return JSON.stringify(await control(exec.agent, controlSchema.parse(args), toolOperationId(exec), exec.signal));
+		}
+	});
+}
 // src/host/worker-operations.ts
 /** Native worker operations with durable operation identities. */
 var WorkerOperations = class {
@@ -878,7 +1261,7 @@ var WorkerOperations = class {
 	}
 	listWorkers(agent, signal) {
 		const r = this.host.requireCoordinator(agent);
-		return Promise.all(r.workers.filter((w) => w.lifecycle !== "deleted").map((w) => this.host.inspect(w, signal)));
+		return Promise.all(r.workers.filter(isVisibleWorker).map((w) => this.host.inspect(w, signal)));
 	}
 	async controlForAgent(agent, request, operationId, signal) {
 		const req = controlSchema.parse(request), r = this.host.requireCoordinator(agent);
@@ -908,49 +1291,7 @@ var WorkerOperations = class {
 		let r = this.host.requireCoordinator(agent);
 		const placement = projected(this.host.ctx, agent.session);
 		const turn = this.host.ctx.sessionProjections.stateOf(agent.session, "turnBoundary").lastTurn;
-		if (req.action === "interrupt" || req.action === "delete") {
-			const worker = this.host.worker(r, req.worker_id);
-			if (req.action === "interrupt" && worker.lifecycle === "deleted") throw new Error("project-mode/worker-inactive");
-			if (req.action === "interrupt") this.host.ctx.subagents.interrupt(req.worker_id, {
-				kind: "ancestor",
-				agent
-			});
-			else if (worker.lifecycle !== "deleted") {
-				await this.host.update(agent.id, (r) => ({
-					...r,
-					workers: r.workers.map((w) => w.id === worker.id ? {
-						...w,
-						lifecycle: "deleting"
-					} : w)
-				}));
-				await this.host.ctx.subagents.drainChildren(agent, [req.worker_id]);
-				await this.host.update(agent.id, (r) => ({
-					...r,
-					workers: r.workers.map((w) => w.id === worker.id ? {
-						...w,
-						lifecycle: "deleted",
-						deletedAt: Date.now()
-					} : w)
-				}));
-			}
-			const receipt = {
-				operationId,
-				workerId: req.worker_id,
-				accepted: true,
-				...req.action === "delete" ? {
-					lifecycle: "deleted",
-					historyRetained: true
-				} : { queuedWorkPolicy: "native-preserve" }
-			};
-			await this.host.update(agent.id, (r) => ({
-				...r,
-				operations: {
-					...r.operations,
-					[operationId]: JSON.parse(JSON.stringify(receipt))
-				}
-			}));
-			return receipt;
-		}
+		if (req.action === "interrupt" || req.action === "delete") return this.interruptOrDelete(agent, req, operationId);
 		let assignment = r.assignments.find((a) => a.operationId === operationId);
 		const workerId = req.action === "spawn" ? SessionId(assignment?.workerId ?? randomUUID()) : req.worker_id;
 		if (req.action === "send" && this.host.worker(r, workerId).lifecycle !== "active") throw new Error("project-mode/worker-inactive");
@@ -963,6 +1304,78 @@ var WorkerOperations = class {
 			throw new Error("project-mode/admission-uncertain: reconcile before retry");
 		}
 		const assignmentId = randomUUID();
+		await this.prepareAssignment(agent, req, operationId, workerId, assignmentId, turn, placement);
+		let accepted = false;
+		try {
+			const messageId = await this.admitWorkerInput(agent, req, operationId, workerId, signal);
+			accepted = true;
+			const receipt = await this.acceptReceipt(agent, operationId, workerId, assignmentId, messageId, turn, req.action === "spawn" ? void 0 : req.delivery);
+			this.host.enqueue(() => this.host.ingest(workerId));
+			return receipt;
+		} catch (error) {
+			const rejection = accepted ? void 0 : nativeAdmissionRejection(error);
+			await this.host.update(agent.id, (r) => ({
+				...r,
+				workers: rejection && req.action === "spawn" ? r.workers.map((w) => w.id === workerId && w.lifecycle === "provisioning" ? {
+					...w,
+					lifecycle: "provision-failed"
+				} : w) : r.workers,
+				assignments: r.assignments.map((a) => a.id === assignmentId ? {
+					...a,
+					admission: rejection ? "rejected" : "unknown",
+					...rejection ? { rejection } : {}
+				} : a)
+			}));
+			throw error;
+		}
+	}
+	/** Stop/removal is independent from assigning another turn of work. */
+	async interruptOrDelete(agent, req, operationId) {
+		const r = this.host.requireCoordinator(agent);
+		const worker = this.host.worker(r, req.worker_id);
+		if (req.action === "interrupt" && worker.lifecycle === "deleted") throw new Error("project-mode/worker-inactive");
+		if (req.action === "interrupt") this.host.ctx.subagents.interrupt(req.worker_id, {
+			kind: "ancestor",
+			agent
+		});
+		else if (worker.lifecycle !== "deleted") {
+			await this.host.update(agent.id, (r) => ({
+				...r,
+				workers: r.workers.map((w) => w.id === worker.id ? {
+					...w,
+					lifecycle: "deleting"
+				} : w)
+			}));
+			await this.host.ctx.subagents.drainChildren(agent, [req.worker_id]);
+			await this.host.update(agent.id, (r) => ({
+				...r,
+				workers: r.workers.map((w) => w.id === worker.id ? {
+					...w,
+					lifecycle: "deleted",
+					deletedAt: Date.now()
+				} : w)
+			}));
+		}
+		const receipt = {
+			operationId,
+			workerId: req.worker_id,
+			accepted: true,
+			...req.action === "delete" ? {
+				lifecycle: "deleted",
+				historyRetained: true
+			} : { queuedWorkPolicy: "native-preserve" }
+		};
+		await this.host.update(agent.id, (r) => ({
+			...r,
+			operations: {
+				...r.operations,
+				[operationId]: JSON.parse(JSON.stringify(receipt))
+			}
+		}));
+		return receipt;
+	}
+	/** Record operation intent before crossing native inbox admission. */
+	async prepareAssignment(agent, req, operationId, workerId, assignmentId, turn, placement) {
 		await this.host.update(agent.id, (r) => ({
 			...r,
 			workers: req.action === "spawn" ? [...r.workers, {
@@ -986,59 +1399,38 @@ var WorkerOperations = class {
 				...req.task_ref ? { taskRef: req.task_ref } : {}
 			}]
 		}));
-		let accepted = false;
-		try {
-			let messageId;
-			if (req.action === "spawn") {
-				const activation = await this.host.ctx.subagents.startActivation({
-					provider: "spawn",
-					label: req.name,
-					childId: workerId,
-					delivery: "caller",
-					signal,
-					request: {
-						parent: agent,
-						prompt: [{
-							type: "text",
-							text: req.task
-						}],
-						cwd: this.host.ctx.workingDirectory.get(agent.session)
-					}
-				});
-				activation.result.catch((error) => {
-					this.host.errors.set(workerId, String(error));
-					this.host.notify();
-				});
-				messageId = activation.messageId;
-			} else messageId = await (req.delivery === "queue" ? queueHostSubagentPrompt : steerHostSubagentPrompt)(this.host.ctx.subagents, agent, workerId, [{
-				type: "text",
-				text: req.message
-			}], {
-				kind: "project-mode-assignment",
-				form: "relay",
-				operationId,
-				coordinatorSessionId: agent.id
-			}, signal);
-			accepted = true;
-			const receipt = await this.acceptReceipt(agent, operationId, workerId, assignmentId, messageId, turn, req.action === "spawn" ? void 0 : req.delivery);
-			this.host.enqueue(() => this.host.ingest(workerId));
-			return receipt;
-		} catch (error) {
-			const rejection = accepted ? void 0 : nativeAdmissionRejection(error);
-			await this.host.update(agent.id, (r) => ({
-				...r,
-				workers: rejection && req.action === "spawn" ? r.workers.map((w) => w.id === workerId && w.lifecycle === "provisioning" ? {
-					...w,
-					lifecycle: "provision-failed"
-				} : w) : r.workers,
-				assignments: r.assignments.map((a) => a.id === assignmentId ? {
-					...a,
-					admission: rejection ? "rejected" : "unknown",
-					...rejection ? { rejection } : {}
-				} : a)
-			}));
-			throw error;
-		}
+	}
+	async admitWorkerInput(agent, req, operationId, workerId, signal) {
+		if (req.action === "spawn") {
+			const activation = await this.host.ctx.subagents.startActivation({
+				provider: "spawn",
+				label: req.name,
+				childId: workerId,
+				delivery: "caller",
+				signal,
+				request: {
+					parent: agent,
+					prompt: [{
+						type: "text",
+						text: req.task
+					}],
+					cwd: this.host.ctx.workingDirectory.get(agent.session)
+				}
+			});
+			activation.result.catch((error) => {
+				this.host.ctx.logger.warn(`project-mode: worker ${workerId}: ${String(error)}`);
+				this.host.notify();
+			});
+			return activation.messageId;
+		} else return (req.delivery === "queue" ? queueHostSubagentPrompt : steerHostSubagentPrompt)(this.host.ctx.subagents, agent, workerId, [{
+			type: "text",
+			text: req.message
+		}], {
+			kind: "project-mode-assignment",
+			form: "relay",
+			operationId,
+			coordinatorSessionId: agent.id
+		}, signal);
 	}
 	async acceptReceipt(agent, operationId, workerId, assignmentId, messageId, turn, delivery) {
 		const receipt = {
@@ -1131,7 +1523,6 @@ var TurnCoordination = class {
 					const failed = r.deliveries.find((d) => d.lastError && d.attempts > this.host.config.retryMaxAttempts);
 					if (failed) throw new Error(`project-mode/result-admission-failed: ${failed.completionId}: ${failed.lastError}`);
 					const results = r.deliveries.filter((d) => d.state !== "consumed" && d.state !== "suppressed");
-					if (this.host.errors.has("runtime")) throw new Error(this.host.errors.get("runtime"));
 					if (!pending.length && !results.length && !views.some((v) => v.status === "busy" || v.queueLength || v.pendingSteerCount) && !this.host.pendingOperations(agent.id)) return;
 					const parked = views.find((v) => v.status === "idle" && (v.queueLength || v.pendingSteerCount));
 					if (parked) {
@@ -1482,35 +1873,6 @@ Carry the assigned investigation or execution through to a result. Use the nativ
 You and the coordinator maintain shared context together. Contribute valuable findings reusable in future work to the relevant context files, then update the shared index with paths and short descriptions. The coordinator primarily organizes, consolidates and prunes context. It maintains notes.md and archived.md as the project's work records.
 
 End with a self-contained AI message describing what you did, the result and evidence, changed files or artifacts, reusable context added, and remaining issues. This turn's complete last AI message is returned to the coordinator automatically. The coordinator reviews it and decides whether to continue, reassign or conclude. Your coordinator and exact project paths are supplied below.`;
-// src/host/project-memory.ts
-const contextIndexTemplate = "# Project context\n\nRead this shared index first, then open only the context files needed for the task. Coordinator and Workers maintain reusable project knowledge here. Workers contribute valuable reusable findings; the Coordinator primarily organizes, consolidates and prunes context. Keep each entry's path and short description current.\n\n## Context files\n";
-const contextIndexPath = (paths) => resolve(paths.context, "context.md");
-/** Backfill only a missing index through the acting Agent's native filesystem. */
-async function ensureContextIndex(ctx, agent, project, signal) {
-	const presets = ctx.get("agentPresets");
-	const fs = presets?.serviceFor(agent, "fs") ?? agent.ctx.get("fs");
-	if (!fs) throw new Error("project-mode/filesystem-unavailable");
-	const cwd = project.workspacePath;
-	const workspace = await fs.resolve(cwd, { signal });
-	const index = await fs.resolve(contextIndexPath(project.paths), {
-		cwd,
-		signal
-	});
-	if (!fs.contains(workspace, index)) throw new Error("project-mode/path-escape");
-	if (await fs.stat(index, signal)) return;
-	const directory = await fs.resolve(project.paths.context, {
-		cwd,
-		signal
-	});
-	const links = (await fs.stat(directory, signal) ? await fs.listDir(directory, signal) : []).filter((e) => e.name !== "context.md" && (e.type === "file" || e.type === "directory")).map((e) => {
-		const name = e.name.replace(/[\[\]\\]/g, "\\$&");
-		const href = encodeURIComponent(e.name).replace(/[()]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
-		return `- [${name}${e.type === "directory" ? "/" : ""}](./${href}) — Existing context ${e.type === "directory" ? "folder" : "file"}; add a short description.\n`;
-	}).join("");
-	const policy = (presets?.serviceFor(agent, "sandboxPolicy") ?? agent.ctx.get("sandboxPolicy"))?.resolve({ session: agent.session });
-	if (fs.sandboxMode && !policy) throw new Error("project-mode/missing-filesystem-policy");
-	await fs.writeText(index, contextIndexTemplate + links, { kind: "createIfAbsent" }, signal, policy);
-}
 // src/host/worker-activity.ts
 /** Read native committed messages and the native Inbox; no shadow task queue. */
 async function readWorkerActivity(host, workerId, signal, previewChars = host.config.progressTextMaxChars) {
@@ -1681,9 +2043,6 @@ var __disposeResources = (function(SuppressedError) {
 	var e = new Error(message);
 	return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
-function hasOwnTurn(events, inheritedEventCount) {
-	return events.some((event) => event.type === "turn/start" && event.seq >= inheritedEventCount);
-}
 let ProjectMode = (() => {
 	let _classSuper = TypertRemoteService;
 	let _instanceExtraInitializers = [];
@@ -1826,12 +2185,12 @@ let ProjectMode = (() => {
 		outbox;
 		workers;
 		turns;
+		lifecycle;
 		get access() {
 			return {
 				ctx: this.ctx,
 				config: this.config,
 				closing: this.closing,
-				errors: this.errors,
 				listeners: this.listeners,
 				record: (id) => this.record(id),
 				owner: (id) => this.owner(id),
@@ -1857,7 +2216,6 @@ let ProjectMode = (() => {
 		progress = /* @__PURE__ */ new Map();
 		workerInputSnapshots = /* @__PURE__ */ new Map();
 		epoch = randomUUID();
-		errors = /* @__PURE__ */ new Map();
 		available = false;
 		closing = new AbortController();
 		constructor(ctx, config) {
@@ -1871,6 +2229,11 @@ let ProjectMode = (() => {
 			this.outbox = new CompletionOutbox(this.access);
 			this.workers = new WorkerOperations(this.access);
 			this.turns = new TurnCoordination(this.access);
+			this.lifecycle = new ProjectLifecycle(this.access, {
+				put: (id, record) => this.domain.table("projects").put(id, record),
+				attach: (agent) => this.attach(agent),
+				recover: (id) => this.recover(id)
+			});
 			await registerProjection(this.ctx);
 			const hiddenToolSections = new Set(this.config.coordinatorHiddenTools.map((name) => `tool:${name}`));
 			this.ctx.on("system-prompt/assemble", async (_assembly, { agent }, next) => {
@@ -1901,180 +2264,22 @@ let ProjectMode = (() => {
 				interpolate: false,
 				text: ({ agent }) => agent && this.record(agent.id)?.project.mode === "enabled" ? coordinatorPrompt : ""
 			});
-			this.controlTool = defineTool({
-				name: "control_workers",
-				description: "Delegate tasks to workers with the same native tools and skills. spawn starts independent execution; send continues it; list/get/history inspect; interrupt/delete manage lifecycle. When waiting for workers, yield your response; results resume this coordinator turn automatically.",
-				parameters: {
-					action: {
-						type: "string",
-						required: true,
-						description: "Action: spawn, list, send, get, history, interrupt, delete"
-					},
-					name: {
-						type: "string",
-						description: "Worker name"
-					},
-					task: {
-						type: "string",
-						description: "Initial task"
-					},
-					worker_id: {
-						type: "string",
-						description: "Worker session id"
-					},
-					message: {
-						type: "string",
-						description: "Follow-up"
-					},
-					delivery: {
-						type: "string",
-						enum: ["steer", "queue"],
-						description: "Immediate step or next turn"
-					},
-					offset: {
-						type: "integer",
-						description: "History index from newest (0 = latest visible message)"
-					},
-					limit: {
-						type: "integer",
-						description: "History window length; returns user/assistant messages newest first"
-					},
-					task_ref: {
-						type: "string",
-						description: "Task reference"
-					}
+			this.controlTool = createWorkerControlTool((...args) => this.controlForAgent(...args));
+			bindAgentEvents(this.access, {
+				outbox: this.outbox,
+				workers: this.workers,
+				progress: this.progress,
+				reconcileTools: () => this.reconcileTools(),
+				attach: (agent) => this.attach(agent),
+				disposeAgent: (agent) => {
+					this.workerInputSnapshots.delete(agent.id);
+					this.mounted.get(agent)?.dispose();
+					this.mounted.delete(agent);
 				},
-				output: {
-					schema: { type: "string" },
-					render: (_a, value) => [{
-						type: "text",
-						text: value
-					}]
-				},
-				execute: async (args, exec) => {
-					if (!exec.agent) throw new Error("project-mode/not-coordinator");
-					return JSON.stringify(await this.controlForAgent(exec.agent, controlSchema.parse(args), toolOperationId(exec), exec.signal));
-				}
-			});
-			this.ctx.on("agent/pre-step", async ({ agent, signal }, next) => {
-				const decision = await next();
-				const project = this.record(agent.id) ?? this.owner(agent.id);
-				if (decision.kind !== "enter" || project?.project.mode !== "enabled" || !decision.messages.some((m) => [
-					"user",
-					"project-mode-assignment",
-					"project-mode-result",
-					"subagent-settled",
-					"agent-message"
-				].includes(m.source.kind))) return decision;
-				const control = AbortSignal.any([signal, this.closing.signal]);
-				try {
-					await ensureContextIndex(this.ctx, agent, project.project, control);
-				} catch (error) {
-					control.throwIfAborted();
-					this.ctx.logger.warn(`project-mode: context index: ${String(error)}`);
-				}
-				return decision;
-			});
-			this.ctx.on("tools/change", () => {
-				if (this.closing.signal.aborted) return;
-				if (this.reconcilingTools) {
-					this.toolsChangedDuringReconciliation = true;
-					return;
-				}
-				for (const agent of this.ctx.agents.list()) this.attach(agent);
-			});
-			this.ctx.on("agent/created", async ({ agent }) => {
-				this.attach(agent);
-				if (this.record(agent.id)) this.enqueue(() => this.recover(agent.id));
-				this.notify();
-			});
-			this.ctx.on("agent/status", () => this.notify());
-			this.ctx.on("agent/assistant-stream", ({ agent, frame }) => {
-				if (!this.owner(agent.id)) return;
-				if (frame.type === "start") this.progress.delete(agent.id);
-				if (frame.type === "chunk" && frame.chunk.type === "text-delta") this.progress.set(agent.id, ((this.progress.get(agent.id) ?? "") + frame.chunk.text).slice(-this.config.progressTextMaxChars));
-				this.notify();
-			});
-			this.ctx.on("agent/inbox/inserted", () => this.notify());
-			this.ctx.on("session/event", (session, event) => {
-				if (event.type === "turn/start" && this.record(session.id)?.project.mode === "enabled") this.enqueue(async () => {
-					const r = this.record(session.id);
-					if (r?.project.mode === "enabled" && !r.project.modeLocked) await this.update(session.id, (current) => ({
-						...current,
-						project: {
-							...current.project,
-							modeLocked: true
-						}
-					}));
-				});
-				if (this.owner(session.id) && event.type === "turn/start") this.progress.delete(session.id);
-				if (this.owner(session.id) && event.type === "turn/end") {
-					this.outbox.workerCuts.set(session.id, projected(this.ctx, session));
-					this.enqueue(() => this.ingest(session.id));
-				}
-				if (this.record(session.id) && event.type === "user/message") {
-					this.outbox.claimed.get(session.id)?.delete(event.data.id);
-					this.enqueue(() => this.consume(session.id, event.data.id));
-				}
-				if (this.record(session.id) && event.type === "turn/end") {
-					this.outbox.claimed.delete(session.id);
-					this.enqueue(() => this.freezeTurn(session.id, event.data.turn, event.data.reason.kind));
-				}
-				this.notify();
-			});
-			this.ctx.on("agent/turn-stopping", async ({ agent, turn, signal }) => {
-				if (this.record(agent.id)?.project.mode === "enabled") await this.guardTurn(agent, turn, signal);
-			});
-			this.ctx.on("agent/pre-step", async ({ agent, signal }, next) => {
-				if (!this.record(agent.id)) return next();
-				const control = AbortSignal.any([signal, this.closing.signal]);
-				control.throwIfAborted();
-				this.outbox.normalizing.add(agent.id);
-				try {
-					const decision = await next();
-					control.throwIfAborted();
-					if (decision.kind !== "enter" || !this.record(agent.id)) return decision;
-					if (this.record(agent.id)?.project.mode === "enabled" && decision.messages.some((m) => m.source.kind === "user")) await this.refreshWorkersForInput(agent, decision.messages.filter((m) => m.source.kind === "user").map((m) => m.id), control);
-					const claimed = this.outbox.claimed.get(agent.id) ?? /* @__PURE__ */ new Set();
-					this.outbox.claimed.set(agent.id, claimed);
-					for (const message of decision.messages) if (message.source.kind === "project-mode-result") claimed.add(message.id);
-					const managed = decision.messages.filter((m) => {
-						const source = m.source;
-						return source.kind === "subagent-settled" && this.record(agent.id).workers.some((w) => w.id === source.senderSessionId);
-					});
-					for (const message of managed) {
-						if (message.source.kind !== "subagent-settled") continue;
-						for (const assignment of this.record(agent.id).assignments) {
-							if (assignment.workerId !== message.source.senderSessionId) continue;
-							const admission = this.workers.operations.get(JSON.stringify([agent.id, assignment.operationId]));
-							if (admission) await waitForTurn(admission, control);
-							control.throwIfAborted();
-						}
-					}
-					for (const message of managed) {
-						if (message.source.kind === "subagent-settled") await waitForTurn(this.ingest(message.source.senderSessionId), control);
-						control.throwIfAborted();
-					}
-					control.throwIfAborted();
-					const messages = decision.messages.filter((m) => !managed.includes(m));
-					const r = this.record(agent.id);
-					for (const d of r.deliveries) if (d.state !== "consumed" && d.state !== "suppressed" && !messages.some((m) => m.id === d.message.id)) {
-						agent.inbox.remove(d.message.id);
-						messages.push(freezeMessage(d.message));
-						claimed.add(d.message.id);
-					}
-					return managed.length > 0 && messages.length === 0 ? { kind: "reject" } : {
-						...decision,
-						messages
-					};
-				} finally {
-					this.outbox.normalizing.delete(agent.id);
-				}
-			});
-			this.ctx.on("agent/disposed", ({ agent }) => {
-				this.workerInputSnapshots.delete(agent.id);
-				this.mounted.get(agent)?.dispose();
-				this.mounted.delete(agent);
+				recover: (id) => this.recover(id),
+				guardTurn: (agent, turn, signal) => this.guardTurn(agent, turn, signal),
+				freezeTurn: (id, turn, reason) => this.freezeTurn(id, turn, reason),
+				refreshWorkersForInput: (agent, ids, signal) => this.refreshWorkersForInput(agent, ids, signal)
 			});
 			this.ctx.effect(() => async () => {
 				this.available = false;
@@ -2155,6 +2360,14 @@ let ProjectMode = (() => {
 				id
 			})) throw new Error("project-mode/unauthorized: Session access denied");
 		}
+		reconcileTools() {
+			if (this.closing.signal.aborted) return;
+			if (this.reconcilingTools) {
+				this.toolsChangedDuringReconciliation = true;
+				return;
+			}
+			for (const agent of this.ctx.agents.list()) this.attach(agent);
+		}
 		attach(agent) {
 			const enabled = this.record(agent.id)?.project.mode === "enabled";
 			if (this.reconcilingTools || this.closing.signal.aborted) return;
@@ -2207,7 +2420,6 @@ let ProjectMode = (() => {
 		}
 		enqueue(work) {
 			this.jobs = this.jobs.then(work).catch((error) => {
-				this.errors.set("runtime", String(error));
 				this.ctx.logger.warn(String(error));
 			}).then(() => this.notify());
 		}
@@ -2348,42 +2560,17 @@ let ProjectMode = (() => {
 			await this.jobs;
 			const r = this.record(sessionId);
 			if (!r) return null;
-			const members = r.workers.filter((w) => w.lifecycle !== "deleted"), memberIds = new Set(members.map((w) => w.id)), workers = await Promise.all(members.map((w) => this.view(w))), agent = this.ctx.agents.get(sessionId), boundary = agent ? this.ctx.sessionProjections.stateOf(agent.session, "turnBoundary") : void 0;
-			const turn = boundary?.lastTurn ?? 0;
-			const coordinatorTurn = boundary?.openTurnStartSeq !== null && boundary !== void 0 ? {
+			const members = r.workers.filter(isVisibleWorker), memberIds = new Set(members.map((w) => w.id)), workers = await Promise.all(members.map((w) => this.view(w))), agent = this.ctx.agents.get(sessionId);
+			return buildProjectSnapshot({
 				sessionId,
-				turn,
-				phase: this.turns.waiting.has(sessionId) ? "waiting-workers" : "working",
-				workerIds: [...new Set(r.memberships.filter((m) => m.coordinatorTurn === turn && memberIds.has(m.workerId)).map((m) => SessionId(m.workerId)))],
-				unresolvedOperationIds: r.assignments.filter((a) => a.admission === "unknown" || a.admission === "prepared").map((a) => a.operationId),
-				pendingAssignmentIds: r.assignments.filter((a) => a.admission !== "rejected" && !r.completions.some((c) => c.assignmentIds.includes(a.id))).map((a) => a.id),
-				runningWorkerIds: workers.filter((w) => w.status === "busy").map((w) => w.workerId),
-				queuedWorkerIds: workers.filter((w) => w.queueLength).map((w) => w.workerId),
-				undeliveredCompletionIds: r.deliveries.filter((d) => d.state === "pending").map((d) => d.completionId),
-				unconsumedCompletionIds: r.deliveries.filter((d) => d.state !== "consumed" && d.state !== "suppressed").map((d) => d.completionId),
-				pendingSteerCount: agent?.inbox.nextStep.length ?? 0,
-				revision: r.project.revision
-			} : null;
-			return {
-				project: {
-					...r.project,
-					coordinatorSessionId: SessionId(r.project.coordinatorSessionId)
-				},
+				record: r,
 				workers,
-				turnMemberships: r.memberships.filter((m) => memberIds.has(m.workerId)).map((m) => ({
-					...m,
-					coordinatorSessionId: SessionId(m.coordinatorSessionId),
-					workerId: SessionId(m.workerId)
-				})),
-				closedTurnOutcomes: r.outcomes.filter((o) => memberIds.has(o.workerId)).map((o) => ({
-					...o,
-					coordinatorSessionId: SessionId(o.coordinatorSessionId),
-					workerId: SessionId(o.workerId)
-				})),
-				coordinatorTurn,
-				streamEpoch: this.epoch,
-				revision: r.project.revision
-			};
+				memberIds,
+				boundary: agent ? this.ctx.sessionProjections.stateOf(agent.session, "turnBoundary") : void 0,
+				waiting: this.turns.waiting.has(sessionId),
+				pendingSteerCount: agent?.inbox.nextStep.length ?? 0,
+				streamEpoch: this.epoch
+			});
 		}
 		async *follow(sessionId, signal) {
 			const control = AbortSignal.any([signal, this.closing.signal]);
@@ -2450,124 +2637,11 @@ let ProjectMode = (() => {
 		}
 		mode(sessionId) {
 			this.authorize(sessionId);
-			const worker = this.owner(sessionId), r = this.record(sessionId), agent = this.ctx.agents.get(sessionId);
-			const modeLocked = this.modeLocked(r, agent);
-			const blocked = worker ? "worker-session" : modeLocked ? "session-mode-locked" : !agent && !ordinarySessionResolver(this.ctx) ? "runtime-unavailable" : agent?.status === "running" ? "agent-running" : void 0;
-			return {
-				sessionId,
-				role: worker ? "worker" : r ? "coordinator" : "ordinary",
-				enabled: r?.project.mode === "enabled",
-				modeLocked,
-				revision: r?.project.revision ?? 0,
-				canToggle: !blocked,
-				...blocked ? { toggleBlockedReason: blocked } : {},
-				...r ? {
-					projectId: r.project.id,
-					paths: r.project.paths
-				} : {},
-				...worker ? {
-					projectId: worker.project.id,
-					coordinatorSessionId: SessionId(worker.project.coordinatorSessionId)
-				} : {}
-			};
-		}
-		modeLocked(r, agent) {
-			return r?.project.mode === "enabled" && (r.project.modeLocked !== false || !!agent && hasOwnTurn(agent.session.snapshotEvents(), agent.session.inheritedEventCount));
+			return this.lifecycle.mode(sessionId);
 		}
 		async setEnabled(sessionId, enabled, expectedRevision, requestId) {
 			this.authorize(sessionId);
-			if (!requestId) throw new Error("requestId required");
-			const old = this.record(sessionId);
-			if (old?.toggles[requestId] !== void 0) return this.mode(sessionId);
-			if (this.owner(sessionId)) throw new Error("project-mode/worker-session");
-			if (!enabled && this.modeLocked(old, this.ctx.agents.get(sessionId))) throw new Error("project-mode/session-mode-locked");
-			if ((old?.project.revision ?? 0) !== expectedRevision) throw new Error("project-mode/revision-conflict");
-			const agent = await resolveOrdinaryAgent(this.ctx, sessionId);
-			if (!agent) throw new Error("project-mode/runtime-unavailable");
-			if (this.owner(sessionId)) throw new Error("project-mode/worker-session");
-			if (!enabled && this.modeLocked(this.record(sessionId), agent)) throw new Error("project-mode/session-mode-locked");
-			if (agent.status !== "idle") throw new Error("project-mode/agent-running");
-			await agent.runMaintenance(async (signal) => {
-				let r = this.record(sessionId);
-				if (!enabled && this.modeLocked(r, agent)) throw new Error("project-mode/session-mode-locked");
-				if ((r?.project.revision ?? 0) !== expectedRevision) throw new Error("project-mode/revision-conflict");
-				if (!enabled && r) {
-					if (r.deliveries.some((d) => d.state !== "consumed" && d.state !== "suppressed")) throw new Error("project-mode/results-pending");
-					if ((await Promise.all(r.workers.filter((w) => w.lifecycle !== "deleted" && w.lifecycle !== "provision-failed").map((w) => this.view(w)))).some((v) => v.status !== "idle" || v.queueLength || v.pendingSteerCount) || r.assignments.some((a) => a.admission === "prepared" || a.admission === "unknown")) throw new Error("project-mode/workers-active");
-				}
-				if (!r) {
-					if (!enabled) return;
-					const cwd = await this.ctx.workingDirectory.ensure(agent, signal), id = randomUUID(), base = this.config.dataDirectory;
-					if (isAbsolute(base) || relative(".", base).split(/[\\/]/).includes("..")) throw new Error("project-mode/invalid-directory");
-					const root = resolve(cwd, base, id), paths = {
-						root,
-						context: resolve(root, "context"),
-						notes: resolve(root, "notes.md"),
-						archived: resolve(root, "archived.md")
-					};
-					const presets = this.ctx.get("agentPresets");
-					const fs = presets?.serviceFor(agent, "fs") ?? agent.ctx.get("fs");
-					if (!fs) throw new Error("project-mode/filesystem-unavailable");
-					const cwdTarget = await fs.resolve(cwd);
-					const policy = (presets?.serviceFor(agent, "sandboxPolicy") ?? agent.ctx.get("sandboxPolicy"))?.resolve({ session: agent.session });
-					if (fs.sandboxMode && !policy) throw new Error("project-mode/missing-filesystem-policy");
-					for (const [path, content] of [
-						[paths.notes, "# Active tasks\n"],
-						[paths.archived, "# Archived tasks\n"],
-						[contextIndexPath(paths), contextIndexTemplate]
-					]) {
-						const target = await fs.resolve(path, {
-							cwd,
-							signal
-						});
-						if (!fs.contains(cwdTarget, target)) throw new Error("project-mode/path-escape");
-						if (await fs.stat(target, signal) === void 0) await fs.writeText(target, content, { kind: "createIfAbsent" }, signal, policy);
-					}
-					const now = Date.now();
-					r = {
-						project: {
-							version: 1,
-							id,
-							coordinatorSessionId: sessionId,
-							workspacePath: cwd,
-							paths,
-							mode: "disabled",
-							modeLocked: false,
-							revision: 0,
-							createdAt: now,
-							updatedAt: now
-						},
-						workers: [],
-						assignments: [],
-						completions: [],
-						deliveries: [],
-						memberships: [],
-						outcomes: [],
-						operations: {},
-						toggles: {},
-						reminders: {}
-					};
-				}
-				r = {
-					...r,
-					project: {
-						...r.project,
-						mode: enabled ? "enabled" : "disabled",
-						modeLocked: r.project.modeLocked === true || enabled && hasOwnTurn(agent.session.snapshotEvents(), agent.session.inheritedEventCount),
-						revision: r.project.revision + 1,
-						updatedAt: Date.now()
-					},
-					toggles: {
-						...r.toggles,
-						[requestId]: r.project.revision + 1
-					}
-				};
-				await this.domain.table("projects").put(sessionId, recordSchema.parse(r));
-				this.attach(agent);
-				if (this.record(agent.id)) this.enqueue(() => this.recover(agent.id));
-				this.notify();
-			});
-			return this.mode(sessionId);
+			return this.lifecycle.setEnabled(sessionId, enabled, expectedRevision, requestId);
 		}
 	};
 })();

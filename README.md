@@ -2,19 +2,55 @@
 
 Give a project a persistent Coordinator that manages Workers, maintains project knowledge and decides how to move the work forward.
 
-[中文](README.zh.md) · [MOA model](docs/moa-architecture.md) · [Code architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
+English | [简体中文](README.zh.md)
 
-**Developer preview: v0.1.21.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. Stock rc.3 cannot enable the plugin. Read [Compatibility](docs/compatibility.md) before installing.
+**Developer preview: v0.1.22.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. Stock rc.3 cannot enable the plugin. Read [Compatibility](docs/compatibility.md) before installing.
 
-## What Project Mode does
+## Contents
 
-Working with several Agents usually means someone has to choose who does what, carry context between conversations, follow up on progress and reconcile the results. Project Mode gives that continuing responsibility to a Coordinator in the project's main conversation.
+- [Core capabilities](#core-capabilities)
+- [Quick start](#quick-start)
+- [User guide](#user-guide)
+- [Project memory](#project-memory)
+- [Features in DSH](#features-in-dsh)
+- [Project structure](#project-structure)
+- [Development](#development)
+- [API and documentation](#api-and-documentation)
+- [Current limits](#current-limits)
+- [License](#license)
 
-The Coordinator manages persistent Worker conversations through `control_workers`. It can create or reuse a Worker, guide current work, queue a later instruction, inspect its conversation, interrupt it or remove it from the project. It reviews results and decides whether to continue, reassign or conclude.
+## Core capabilities
 
-Execution uses native DSH Sessions, Agent Loop, tools, permissions and message delivery. Project Mode adds project coordination and a small set of interface extensions.
+Project Mode gives the coordination work of a multi-Agent project to a persistent Coordinator in the main conversation. You set the goal; it chooses Workers, follows their progress, reviews results and keeps project knowledge useful across tasks.
 
-## People, Coordinator and Workers
+| Capability | What it gives you |
+| --- | --- |
+| Persistent coordination | One Coordinator conversation owns the project's work records and next steps. |
+| Full Worker control | Create or reuse Workers, steer current work, queue later instructions, inspect status and history, interrupt or delete. |
+| Shared project knowledge | Coordinator and Workers maintain an index and load relevant context progressively. |
+| Automatic result return | Each ended Worker turn returns its full final AI message for Coordinator review. |
+| Direct human participation | Open a Worker, guide it yourself, then return to the Coordinator. |
+| Native DSH execution | Sessions, Agent Loop, tools, permissions, message delivery and Stop stay with DSH. |
+
+## Quick start
+
+1. Prepare DSH **0.2.1-rc.3** with all three explicit extensions in [Compatibility](docs/compatibility.md):
+   - Agent-local `tools.suppress({ deny })` with reversible disposal.
+   - Per-session `conversation.submission.register(sessionId, "steer")`.
+   - `sidebar.workspaces.session.branch` for native parent/child rows.
+2. Install the tagged bundle through that runtime's CLI:
+
+```sh
+dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.22"
+```
+
+Tagged bundles are listed on [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases).
+
+Enable the plugin in DSH's Plugins page, open a workspace, create a conversation and select **Project** before sending the first message.
+
+The repository includes built artifacts for Git installation. There is no automatic application patching or npm publication. Patching this checkout's development dependencies does not patch your installed DSH application; a packaged Desktop needs a separately prepared compatible runtime. The compatibility guide documents the explicit helper, exact-version checks and backup/restore requirements.
+
+## User guide
 
 | Role | Responsibility |
 | --- | --- |
@@ -50,7 +86,7 @@ Both the Coordinator and Workers maintain context. They read `context/context.md
 
 These documents persist with the project; they are loaded progressively rather than copied into every request. [The MOA model](docs/moa-architecture.md) describes these responsibilities in more detail.
 
-## In DSH
+## Features in DSH
 
 - Select **Project** for a new conversation before its first message. Its Project identity stays fixed after the first turn starts.
 - Expand the Coordinator in the original workspace sidebar to open its Workers. Each has a stable identity icon and current status.
@@ -60,19 +96,19 @@ These documents persist with the project; they are loaded progressively rather t
 
 Coordinator delegation/control tools are replaced only in that Agent's scope. Workers and ordinary conversations retain native composition. Native Stop remains available and does not automatically stop every Worker.
 
-## Installation
+## Project structure
 
-Prepare the DSH runtime you intend to use according to [Compatibility](docs/compatibility.md), then install the tagged bundle through that runtime's CLI:
-
-```sh
-dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.21"
+```text
+packages/project-mode/
+├── src/host/       Project lifecycle, Worker operations and result delivery
+├── src/client/     Sidebar, capsules and project tabs
+├── src/shared/     Shared types and contracts
+└── lib/            Built plugin artifacts
+compat/rc3/         Audited runtime compatibility patches
+scripts/            Build, compatibility and verification helpers
+tests/              Regression and native contract checks
+docs/               Model, architecture, API and verification guides
 ```
-
-You can also install `dsh-plugin-project-mode-0.1.21-npm.tgz` from [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases/tag/v0.1.21).
-
-Enable the plugin in DSH's Plugins page, open a workspace, create a conversation and select **Project** before sending the first message.
-
-The repository includes built artifacts for Git installation. There is no automatic application patching or npm publication. Patching this checkout's development dependencies does not patch your installed DSH application; a packaged Desktop needs a separately prepared compatible runtime. The compatibility guide documents the explicit helper, exact-version checks and backup/restore requirements.
 
 ## Development
 
@@ -89,6 +125,10 @@ npm test -- --maxWorkers=1
 
 `npm test` builds the plugin first. Edit `packages/project-mode/src`; regenerate the committed `lib` artifacts through the build. See [Contributing](CONTRIBUTING.md) for typechecks, native contracts, package consumer verification and the test map.
 
+## API and documentation
+
+The Coordinator uses `control_workers` with `spawn`, `list`, `get`, `send`, `history`, `interrupt` and `delete`. `send` distinguishes current-work **steer** from next-turn **queue**. See the tool API for arguments, examples and result semantics.
+
 | Read this | To understand |
 | --- | --- |
 | [MOA model](docs/moa-architecture.md) | Role responsibilities and progressive shared context |
@@ -100,8 +140,6 @@ npm test -- --maxWorkers=1
 ## Current limits
 
 Delegation remains a model judgment. This preview does not guarantee ideal task ownership on every request, and does not use task keywords or command/time thresholds to force it.
-
-Known issues include error isolation and Worker-list consistency. They are documented under [maintenance debt](docs/architecture.md#current-maintenance-debt), with the [verification record](docs/verification.md) distinguishing confirmed issues from passing release checks.
 
 ## License
 

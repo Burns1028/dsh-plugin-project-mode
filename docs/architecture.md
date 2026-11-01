@@ -24,8 +24,11 @@ The repository root is a private npm forwarding package for Git installation. `p
 
 | Module | Responsibility | Start reading at |
 | --- | --- | --- |
-| [host/index.ts](../packages/project-mode/src/host/index.ts) | Service composition, native hooks, tool mounting, mode identity, recovery and Remote surface | `ProjectMode[Service.init]`, `attach`, `setEnabled`, `snapshot` |
-| [host/worker-operations.ts](../packages/project-mode/src/host/worker-operations.ts) | Validate and own Worker operations, serialize per-Worker mutations, persist admission receipts | `WorkerOperations.controlForAgent`, `dispatch`, `acceptReceipt`, `reconcileAssignment` |
+| [host/index.ts](../packages/project-mode/src/host/index.ts) | Service composition, Agent-scoped tool mounting, recovery and authorized Remote boundary | `ProjectMode[Service.init]`, `attach`, `recover`, typed Remote wrappers |
+| [host/agent-events.ts](../packages/project-mode/src/host/agent-events.ts) | Native event subscriptions and canonical result normalization before a model step | `bindAgentEvents`, `normalizeCoordinatorStep` |
+| [host/project-lifecycle.ts](../packages/project-mode/src/host/project-lifecycle.ts) | Project mode queries, permanent identity and draft enable/disable maintenance | `ProjectLifecycle.mode`, `setEnabled`, `requireCanDisable`, `createRecord` |
+| [host/project-views.ts](../packages/project-mode/src/host/project-views.ts) | Pure snapshot assembly from already-observed native and durable facts | `buildProjectSnapshot` |
+| [host/worker-operations.ts](../packages/project-mode/src/host/worker-operations.ts) | Validate and own Worker operations, serialize per-Worker mutations, persist admission receipts | `controlForAgent`, `dispatch`, `prepareAssignment`, `admitWorkerInput`, `interruptOrDelete`, `acceptReceipt`, `reconcileAssignment` |
 | [host/completion-outbox.ts](../packages/project-mode/src/host/completion-outbox.ts) | Collect ended turns, persist canonical results, admit them to the Coordinator and recognize consumption | `CompletionOutbox.ingest`, `deliver`, `consume` |
 | [host/turn-coordination.ts](../packages/project-mode/src/host/turn-coordination.ts) | Hold normal native closure until Project work/results settle; freeze historical outcomes | `TurnCoordination.guardTurn`, `freezeTurn` |
 | [host/native-receipt.ts](../packages/project-mode/src/host/native-receipt.ts) | Recognize an already-consumed native result during recovery | `consumedNativeReceipts` |
@@ -40,7 +43,9 @@ The repository root is a private npm forwarding package for Git installation. `p
 | [client/panels.tsx](../packages/project-mode/src/client/panels.tsx), [worker-timeline.tsx](../packages/project-mode/src/client/worker-timeline.tsx) | Native right-side tab defaults and the Worker work axis | `registerProjectPanels`, `WorkersPanel` |
 | [client/worker-parent.ts](../packages/project-mode/src/client/worker-parent.ts) | Retain a cold parent while the user opens a managed Worker | `bindWorkerParents` |
 
-`host/native.ts` is a small adaptation layer over public native APIs. `host/host-access.ts` is the current shared dependency contract for the extracted Host components. It still exposes the Host context and callbacks; the file boundaries are useful, but these components remain coupled through that contract.
+`host/control.ts` owns request schemas and the `control_workers` definition; the Service owns Agent-scoped registration. `shared/worker-membership.ts` supplies `isVisibleWorker`, the one predicate for active public lists: deleted members and creation-only failures are omitted, while an existing Worker with a failed execution stays visible. Internal records remain available for recovery.
+
+`host/native.ts` is a small adaptation layer over public native APIs. `host/host-access.ts` is the current shared dependency contract for the extracted Host components. It exposes the Host context and callbacks; the file boundaries are useful, but these components remain coupled through that contract.
 
 ## Data structures and ownership
 
@@ -78,13 +83,13 @@ Result delivery normally follows `pending → admitted → consumed`. A cancelle
 
 ### Enable a Project
 
-`ProjectToggle → ProjectClient.toggle → projectMode.setEnabled → native Agent maintenance → scoped native filesystem → Project record → attach`.
+`ProjectToggle → ProjectClient.toggle → authorized projectMode.setEnabled → ProjectLifecycle.setEnabled → native Agent maintenance → scoped native filesystem → Project record → attach`.
 
 The Host validates Session access and revision, creates missing memory files without overwriting existing ones, and registers `control_workers` in the Coordinator Agent scope. `tools.suppress` removes only the configured native Coordinator delegation tools. First owned native turn start locks the session's Project identity. Draft disable and plugin disposal reverse scoped contributions; they do not rewrite global tool preferences.
 
 ### Dispatch work
 
-`control_workers → toolOperationId → WorkerOperations.controlForAgent → dispatch → native subagents → acceptReceipt`.
+`control_workers → toolOperationId → WorkerOperations.controlForAgent → dispatch → prepareAssignment → admitWorkerInput → native subagents → acceptReceipt`. Interrupt/delete use `interruptOrDelete` without creating an Assignment.
 
 The native tool-call identity supports operation idempotency. The Assignment is persisted before native admission. Spawn uses `subagents.startActivation`; send uses native next-step steer or next-turn queue. Accepted admission records the native message ID and capsule participation. Acceptance is not task completion. Per-Worker mutation serialization is released after admission; it is not held while waiting for model work.
 
@@ -109,6 +114,8 @@ sequenceDiagram
 
 `admitDeliveries` first checks native history and inbox identity, including already-consumed native notices, before waking a cold Coordinator or admitting a canonical message. `consume` records the original message anchor so a later human input cannot move its capsule. `guardTurn` waits on native change notifications and pending Project facts, returning control for new steer input or native Stop. It does not create a second Agent Loop.
 
+Native notifications are bound in `agent-events.ts`; its Coordinator pre-step normalization reconciles managed native settlement notices with the canonical persisted result. The Service keeps the generated Remote method signatures and authorization boundary. Snapshot reads gather native facts before passing them to the pure `buildProjectSnapshot`.
+
 On startup, `recover` reconciles uncertain assignments, interrupted deletions, historical participation and result delivery. `native-receipt.ts` verifies native notice identity/content rather than guessing from similar text or the time the Coordinator later consumed it.
 
 ### Human operation of a Worker
@@ -125,12 +132,12 @@ The Client contributes native slots and tabs. It does not replace the workspace 
 
 The Workers tab consumes a read-only native activity stream. Its timeline shows original Markdown input and the last AI output of each ended turn, collapsed by default. Artifact links come from recorded native deliveries/successful file mutations. Opening the tab does not call a model.
 
-## Current maintenance debt
+## Failure handling and remaining maintenance
 
-- `host/index.ts` still combines service assembly, recovery, mode lifecycle and Remote queries. Extract those responsibilities gradually using the existing modules; a new framework layer is unnecessary.
-- Several lifecycle functions remain long, including `dispatch`, `repairCapsuleOwnership` and the native pre-step result normalization callback. Preserve their operation order and cancellation behavior when separating helpers.
-- `HostAccess.errors` mixes Worker/Coordinator identities with a global `runtime` key. A failed shared background job leaves that key sticky, and every Project's `guardTurn` checks it. A two-Project fault-injection probe reproduced another Project ending in error after the first Project's temporary read failure recovered. This requires scoped failure handling; it is not an intended turn-closure invariant.
-- Failed creation placeholders are hidden by the Client Worker list but remain in the Host `control_workers list` response. A native capacity-rejection probe confirmed this view mismatch; real execution failures on existing Workers should remain visible.
-- Transport enums include values not currently produced by every Host read path. Consult the actual producer and tests before adding behavior around an enum value.
+Background jobs log failures and notify observers. A historical background warning is not a permanent cross-Project execution gate. Normal closure uses the current Project's unresolved assignments, native Worker activity and result-delivery facts. Delivery attempts and errors remain on their durable Delivery records, preserving existing retry and recovery behavior. There is no global `runtime` error latch or parallel error state machine.
 
-See [contributing](../CONTRIBUTING.md) for a focused verification workflow and test map.
+The Host entry is reduced from 1,184 to 738 lines, and initialization from 322 to 120 lines. Mode changes, event binding, tool definition and snapshot assembly have named modules, while the native execution order and public/storage contracts remain unchanged.
+
+Remaining localized work includes `repairCapsuleOwnership`, which still combines historical evidence gathering with migration, and the Coordinator pre-step normalization. `HostAccess` remains a shared native capability interface; narrow it further only when an actual responsibility split needs it. Transport enums include values not currently produced by every Host read path; consult actual producers before adding behavior around an enum value.
+
+See [contributing](../CONTRIBUTING.md) for the verification workflow and test map.

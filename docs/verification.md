@@ -1,5 +1,17 @@
 # Verification
 
+Current source: 0.1.22, 2026-11-02. DSH 0.2.1-rc.3 with the same three explicit compatibility extensions. No additional native patch, public/storage schema change, prompt routing gate or human read/ack state was added.
+
+## Maintenance fixes
+
+- A real native regression reproduces a one-time Project A recovery read failure, then verifies Project B and Project A can finish later turns normally. A second regression verifies current Worker work still holds closure until its canonical result is consumed after a background warning.
+- Native capacity rejection leaves an internal failed-provisioning record, but Coordinator list and public snapshots now omit it. A real Worker whose model execution fails remains an active, visible member.
+- Host event bindings, mode lifecycle and pure snapshot assembly are separated; native mode locking, permissions, dispatch, Stop, result recovery and capsule anchors are exercised by the existing integration regressions.
+
+The earlier audit confirmed both defects in 0.1.21; those findings are now covered by the above fix regressions. Fresh production build and **35 files / 142 tests**, Host/Client typechecks, and **2 files / 8 native contracts** passed. The previous Desktop task below remains historical evidence; it is not claimed as a 0.1.22 real-model run.
+
+# 0.1.21 historical verification
+
 Baseline: DSH 0.2.1-rc.3 with the repository's three explicit compatibility extensions; Node 24.19.0. Version: 0.1.21.
 
 - Production build and 34 Host/Client/integration files: 139 tests passed.
@@ -11,7 +23,3 @@ Baseline: DSH 0.2.1-rc.3 with the repository's three explicit compatibility exte
 The real model task explicitly asked for Worker delegation. It proves the memory and completion chain, not reliable unrestricted natural delegation. Natural task ownership remains model-dependent. UI-only polish was checked separately after installation. Public package verification uses fresh npm and Git-forwarder consumers; raw private acceptance logs and screenshots are intentionally not distributed.
 
 See manual-verification.md for checks to repeat on a new runtime. Stock rc.3 refusal and successful explicit compatibility installation are both expected package-consumer checks.
-
-## Subsequent architecture review
-
-Two targeted native probes identified limitations not covered by the release suite: a recovered background read failure in one Project leaves a sticky global error that causes another Project's next turn to end in error; a native capacity-rejected creation placeholder remains in the Coordinator's list while the Client hides it. These are confirmed current behaviors, not passing regression claims for a fix. See the maintenance-debt section in [code architecture](architecture.md). This review changed documentation only.

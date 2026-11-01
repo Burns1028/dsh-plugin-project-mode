@@ -162,8 +162,11 @@ export const recordSchema = z.object({
   toggles: z.record(z.string(), z.number()),
   reminders: z.record(z.string(), z.boolean()).default({}),
 });
+/** Persisted Project aggregate; execution remains in native Session history. */
 export type RecordState = z.infer<typeof recordSchema>;
+/** One ended native Worker turn and its canonical final assistant payload. */
 export type Completion = z.infer<typeof completionSchema>;
+/** Project membership record, independent of a Worker's live execution status. */
 export type Worker = z.infer<typeof workerSchema>;
 export const domainSpec = defineDomain({
   name: "project_mode",

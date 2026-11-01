@@ -1,3 +1,4 @@
+import { isVisibleWorker } from "../shared/worker-membership.ts";
 import * as React from "react";
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-client-ui-workspace/client";
@@ -36,12 +37,7 @@ export function ProjectBranch(p: BranchProps) {
   const archived = p.useWorkspaces((state) => state.archivedSessionIds);
   const workers = useSelected(p.client.store.subscribe, () =>
     (p.client.store.project(p.sessionId)?.workers ?? [])
-      .filter(
-        (w) =>
-          w.lifecycle !== "deleted" &&
-          w.lifecycle !== "provision-failed" &&
-          !archived.includes(w.workerId),
-      )
+      .filter((w) => isVisibleWorker(w) && !archived.includes(w.workerId))
       .map(({ workerId, name, phase }) => ({ workerId, name, phase })),
   );
   const [expanded, setExpanded] = React.useState(() =>
@@ -165,12 +161,7 @@ export function bindProjectBranches(
   const reconcile = () => {
     const ids = client.store
       .projects()
-      .filter((p) =>
-        p.workers.some(
-          (w) =>
-            w.lifecycle !== "deleted" && w.lifecycle !== "provision-failed",
-        ),
-      )
+      .filter((p) => p.workers.some((w) => isVisibleWorker(w)))
       .map((p) => p.project.coordinatorSessionId)
       .sort();
     const next = JSON.stringify(ids);

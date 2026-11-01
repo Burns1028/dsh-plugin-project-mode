@@ -10,7 +10,6 @@ export interface HostAccess {
   readonly ctx: Context;
   readonly config: Config;
   readonly closing: AbortController;
-  readonly errors: Map<string, string>;
   readonly listeners: Set<() => void>;
   record(id: SessionId): RecordState | undefined;
   owner(id: SessionId): RecordState | undefined;
