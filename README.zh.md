@@ -4,11 +4,18 @@
 
 [English](README.md) | 简体中文
 
+[![DSH Project Mode 实机：Coordinator、Worker 子会话、结果胶囊与项目记录](docs/media/project-workspace.png)](docs/media/project-mode-demo.mp4)
+
+**一个项目，一支持续工作的团队。** 派发任务，随时进入 Worker，始终知道下一步。
+
+[观看 22 秒操作演示](docs/media/project-mode-demo.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
+
 **开发预览版：v0.1.22。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，原版 rc.3 无法启用插件。安装前请先阅读[兼容说明](docs/compatibility.md)。
 
 ## 目录
 
 - [核心能力](#核心能力)
+- [实际效果](#实际效果)
 - [快速开始](#快速开始)
 - [使用指南](#使用指南)
 - [项目记忆](#项目记忆)
@@ -31,6 +38,28 @@ Project Mode 将多 Agent 项目中的协调工作交给主会话中持续负责
 | 自动返回结果 | Worker 每轮结束后自动返回完整的最终 AI 消息，交给 Coordinator 审阅。 |
 | 用户直接参与 | 进入 Worker 直接引导工作，再返回 Coordinator 继续协调。 |
 | DSH 原生执行 | Session、Agent Loop、工具、权限、消息投递和 Stop 均由 DSH 承担。 |
+
+## 实际效果
+
+以一次发布检查为例：一个 Worker 检查发布依据，另一个检查文档，Coordinator 汇总两边的结果。在这个演示中，它还复用了两个 Worker 进行后续交接，并更新 `notes.md`。
+
+[![实际操作演示：切换项目面板、查看 Worker 的输入输出、进入子会话并返回](docs/media/project-mode-demo.gif)](docs/media/project-mode-demo.mp4)
+
+这段演示展示任务完成后的界面操作：**Workers → notes.md → 每轮输入／输出 → Worker 子会话 → Back**。可以[打开 MP4](docs/media/project-mode-demo.mp4)控制播放，也可以[查看工作台原图](docs/media/project-workspace.png)。
+
+### 看清每个 Worker 做了什么
+
+选中 Worker，按由近到远的顺序查看每一轮工作。需要时展开原始指令和最终 AI 回复，打开记录的产物，或直接进入子会话引导它。
+
+[![Worker 工作时间轴：两轮记录、展开的原始输入与最终输出、产物文件链接](docs/media/worker-timeline.png)](docs/media/worker-timeline.png)
+
+### 下一次继续时，项目记录还在
+
+`notes.md` 就在对话旁边，保留目标、已交付工作、当前状态和下一步。Coordinator 负责维护工作记录，可复用的知识则持续积累到共享上下文索引中。
+
+[![DSH 中渲染的 notes.md：项目目标、交付文件、当前状态和后续工作](docs/media/project-notes.png)](docs/media/project-notes.png)
+
+以上均为虚构演示项目 **Project Atlas** 的真实 DSH 界面，使用插件 v0.1.22 和兼容的 rc.3 运行时，展示协作流程，不作为发布质量或速度基准。[素材来源与复用说明](docs/media/README.md)。
 
 ## 快速开始
 

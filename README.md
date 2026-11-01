@@ -4,11 +4,18 @@ Give a project a persistent Coordinator that manages Workers, maintains project 
 
 English | [简体中文](README.zh.md)
 
+[![Project Mode in DSH: Coordinator, Worker conversations, result capsules and project notes](docs/media/project-workspace.png)](docs/media/project-mode-demo.mp4)
+
+**One project, a persistent team.** Delegate work, open any Worker, and keep the next steps in view.
+
+[Watch the 22-second walkthrough](docs/media/project-mode-demo.mp4) · [Explore the screenshots](#see-it-in-action) · [Install](#quick-start)
+
 **Developer preview: v0.1.22.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. Stock rc.3 cannot enable the plugin. Read [Compatibility](docs/compatibility.md) before installing.
 
 ## Contents
 
 - [Core capabilities](#core-capabilities)
+- [See it in action](#see-it-in-action)
 - [Quick start](#quick-start)
 - [User guide](#user-guide)
 - [Project memory](#project-memory)
@@ -31,6 +38,28 @@ Project Mode gives the coordination work of a multi-Agent project to a persisten
 | Automatic result return | Each ended Worker turn returns its full final AI message for Coordinator review. |
 | Direct human participation | Open a Worker, guide it yourself, then return to the Coordinator. |
 | Native DSH execution | Sessions, Agent Loop, tools, permissions, message delivery and Stop stay with DSH. |
+
+## See it in action
+
+A release review is a useful place to start: one Worker checks release evidence, another reviews documentation, and the Coordinator brings the results together. In this demo it then reuses both Workers for a follow-up and updates `notes.md`.
+
+[![UI walkthrough: switch project panels, inspect a Worker turn, open its conversation and return with Back](docs/media/project-mode-demo.gif)](docs/media/project-mode-demo.mp4)
+
+The walkthrough shows navigation after the work has finished: **Workers → notes.md → turn input/output → Worker conversation → Back**. [Open the MP4](docs/media/project-mode-demo.mp4) for playback controls, or [view the workspace screenshot](docs/media/project-workspace.png) at full size.
+
+### Follow each Worker's work
+
+Choose a Worker to see its turns from newest to oldest. Expand the original instruction and final AI response when you need the detail; open recorded artifacts or jump into the conversation to guide it yourself.
+
+[![Worker timeline with two turns, expanded input and output, and links to recorded artifacts](docs/media/worker-timeline.png)](docs/media/worker-timeline.png)
+
+### Keep the project ready for the next task
+
+`notes.md` stays beside the conversation: goal, delivered work, current status and next steps. The Coordinator maintains it while reusable knowledge accumulates under the shared context index.
+
+[![Project notes rendered in DSH with the goal, delivered files, current status and follow-up work](docs/media/project-notes.png)](docs/media/project-notes.png)
+
+These are real DSH captures of **Project Atlas**, a fictional demo workspace, using plugin v0.1.22 and the compatible rc.3 runtime. They illustrate the workflow rather than a release-quality or speed benchmark. [Capture details and reuse](docs/media/README.md).
 
 ## Quick start
 
