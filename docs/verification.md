@@ -1,6 +1,16 @@
 # Verification
 
-Current source: 0.1.22, 2026-11-02. DSH 0.2.1-rc.3 with the same three explicit compatibility extensions. No additional native patch, public/storage schema change, prompt routing gate or human read/ack state was added.
+Current source: 0.1.23, 2026-11-02. DSH 0.2.1-rc.3 with the same three explicit compatibility extensions. The 0.1.23 change adds isolated onboarding and public task evidence; plugin coordination behavior is unchanged from 0.1.22. No additional native patch, public/storage schema change, prompt routing gate or human read/ack state was added.
+
+## 0.1.23 isolated runtime and real workflow
+
+A fresh isolated Web runtime was prepared on macOS arm64 with Node 24.19.0. Setup installed the locked native dependency tree, installed the repository-built 0.1.23 archive, applied exactly the existing three extensions with backups, and passed `doctor`. Its DSH home, Agent configuration and default workspace documents live inside the new directory. No existing Desktop application or personal DSH profile was used.
+
+Fresh verification passed the production build, Host/Client typechecks, 142 Host/Client/integration tests, 8 native contracts and 19 launcher tests. The launcher checks include ownership/path refusal, retry after partial preparation, dependency and native-hash mismatch, fresh artifact paths, and starting an already prepared runtime without npm or Git. macOS and Linux launcher checks are also configured in CI. A full Windows setup has not been verified.
+
+The [Note Bundle workflow](demo-workflow.md) ran against a real configured model and the native UI. The Coordinator dispatched Exporter and Docs. A human changed the accepted ordering directly in Exporter while it was busy; native input queued the instruction for its next turn. The Coordinator received the ended-turn result, checked Worker state, aligned Docs, reviewed the result and closed. A later task reused the same Workers and accepted context to add Cherries without restating the sort order. The final output is Pears, Cherries, Bananas, apples; all 9 tests were independently rerun against the [published result files](demo-result).
+
+After the runtime restarted, both Workers remained idle and the completed Coordinator turn stayed closed. The [60-second edit](media/project-workflow.mp4) uses normal-speed excerpts with waits omitted and labeled; it is not a completion-time benchmark. The prompts explicitly request delegation and reuse, so this demonstrates the coordination chain rather than unrestricted model judgment. The historical timeline Retry limitation below has not been fixed or declared resolved by this onboarding change.
 
 ## Maintenance fixes
 

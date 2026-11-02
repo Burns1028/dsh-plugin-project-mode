@@ -24,6 +24,7 @@ For behavior changes, add a regression covering a meaningful native or UI bounda
 npm test -- --maxWorkers=1
 npm run typecheck
 npm run test:native-contract
+npm run test:launcher
 npm run verify:package
 ```
 
@@ -47,11 +48,14 @@ The single-worker command is useful on a busy machine because several native int
 | Native right-side tabs and Markdown expansion | `tests/client/panels.spec.tsx` |
 | Browser factory and native Remote discovery | `tests/client/boot.spec.ts`, `bundle.spec.ts`, `tests/integration/native-discovery.spec.ts` |
 | Installation into fresh consumers | `scripts/verify-package.mjs` |
+| Isolated runtime preparation, ownership, retry and verification | `tests/launcher/project-mode.test.mjs` |
 
 Use [manual verification](docs/manual-verification.md) for real application changes. `tests/application/acceptance-provider` is a scripted model adapter, not proof of natural delegation quality. Do not send test prompts to an existing personal conversation.
 
 ## Documentation and releases
 
 Keep README installation claims consistent with the compatibility helper. Update Tool API for transport changes and the architecture guide for ownership changes. Preserve published tags/assets; prepare a new release for runtime changes.
+
+The optional first-run launcher lives in `scripts/project-mode.mjs`; its exact native dependency template and lockfile live in `runtime/rc3`. Keep preparation explicit, reuse the existing compatibility manifest, and verify setup in a new directory. Never use an existing personal profile as an installation fixture. The launcher CI exercises macOS and Linux; a full Windows installation has not been verified.
 
 Keep contributions free of credentials, profiles, personal paths, conversations, private screenshots and raw application logs. Do not commit `.superpowers`, `node_modules` or consumer tarballs. Include the MIT license and third-party notices with redistributed bundles.

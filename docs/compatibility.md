@@ -1,5 +1,7 @@
 # Compatibility
 
+For a first trial, use the [isolated Web setup](quickstart.md). It installs locked dependencies and explicitly applies this same manifest inside a new owned directory, without changing an installed Desktop application.
+
 Target: DSH 0.2.1-rc.3, Node 24.9+. Stock rc.3 is incompatible. These are local compatibility extensions, not claims of upstream acceptance:
 
 1. Agent-local `tools.suppress({ deny })`, including tools registered on that Agent, with reversible disposal.

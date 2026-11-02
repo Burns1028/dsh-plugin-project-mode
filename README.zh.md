@@ -4,13 +4,13 @@
 
 [English](README.md) | 简体中文
 
-[![DSH Project Mode 实机：Coordinator、Worker 子会话、结果胶囊与项目记录](docs/media/project-workspace.png)](docs/media/project-mode-demo.mp4)
+[![Project Mode 实际结果：两个 Worker、生成的笔记和通过的九项测试](docs/media/workflow-result.png)](docs/media/project-workflow.mp4)
 
 **一个项目，一支持续工作的团队。** 派发任务，随时进入 Worker，始终知道下一步。
 
-[观看 22 秒操作演示](docs/media/project-mode-demo.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
+[观看 60 秒协作演示](docs/media/project-workflow.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
 
-**非官方开发预览版：v0.1.22。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，原版 rc.3 无法启用插件。安装前请先阅读[兼容说明](docs/compatibility.md)。
+**非官方开发预览版：v0.1.23。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，下方的独立环境脚本会准备好这些扩展；原版 rc.3 无法直接启用插件。详见[兼容说明](docs/compatibility.md)。
 
 ## 目录
 
@@ -41,11 +41,12 @@ Project Mode 将多 Agent 项目中的协调工作交给主会话中持续负责
 
 ## 实际效果
 
-以一次发布检查为例：一个 Worker 检查发布依据，另一个检查文档，Coordinator 汇总两边的结果。在这个演示中，它还复用了两个 Worker 进行后续交接，并更新 `notes.md`。
+用一个小型 CLI 改动展示协作过程：Exporter 实现标题排序并补测试，Docs 维护使用说明，Coordinator 审阅两边的结果。用户进入 Exporter 会话更改排序要求，下一轮再沿用约定，加入一篇笔记。
 
-[![实际操作演示：切换项目面板、查看 Worker 的输入输出、进入子会话并返回](docs/media/project-mode-demo.gif)](docs/media/project-mode-demo.mp4)
+[![实际协作任务：派发 Worker、人工更新需求、接回结果并在下一轮复用上下文](docs/media/project-workflow.gif)](docs/media/project-workflow.mp4)
 
-这段演示展示任务完成后的界面操作：**Workers → notes.md → 每轮输入／输出 → Worker 子会话 → Back**。可以[打开 MP4](docs/media/project-mode-demo.mp4)控制播放，也可以[查看工作台原图](docs/media/project-workspace.png)。
+这段剪辑展示真实的 CLI 任务：**派发 Workers → 人工进入 Exporter 改排序要求 → Coordinator 接回变化 → 下一轮复用已有 Workers 和共享上下文**。等待过程经过剪辑并全程标注，不代表任务在 60 秒内完成；最终示例通过了 9 项真实测试。可以[复现任务](docs/demo-workflow.md)，也可以[查看实际产物](docs/demo-result)。可以[打开 MP4](docs/media/project-workflow.mp4)控制播放，也可以[查看工作台原图](docs/media/project-workspace.png)。
+[![完整任务的实际结果：沿用排序约定生成四篇笔记，9 项测试通过](docs/media/workflow-result.png)](docs/media/workflow-result.png)
 
 ### 看清每个 Worker 做了什么
 
@@ -59,25 +60,30 @@ Project Mode 将多 Agent 项目中的协调工作交给主会话中持续负责
 
 [![DSH 中渲染的 notes.md：项目目标、交付文件、当前状态和后续工作](docs/media/project-notes.png)](docs/media/project-notes.png)
 
-以上均为虚构演示项目 **Project Atlas** 的真实 DSH 界面，使用插件 v0.1.22 和兼容的 rc.3 运行时，展示协作流程，不作为发布质量或速度基准。[素材来源与复用说明](docs/media/README.md)。
+协作视频使用 v0.1.23 独立环境和公开的 Note Bundle 示例；较早的细节图来自 v0.1.22 的虚构项目 **Project Atlas**。这些均为真实 DSH 界面，不是概念图，也不作为速度基准。[素材来源与复用说明](docs/media/README.md)。
 
 ## 快速开始
 
-1. 按[兼容说明](docs/compatibility.md)准备 DSH **0.2.1-rc.3**，包含以下三个显式扩展：
-   - Agent 作用域内可撤销的 `tools.suppress({ deny })`。
-   - 会话级 `conversation.submission.register(sessionId, "steer")`。
-   - 用于原生父子会话行的 `sidebar.workspaces.session.branch`。
-2. 通过该运行时的 CLI 安装指定版本：
+首次试用推荐创建一个独立的**兼容 DSH Web 环境**。需要 Node **24.9+**、npm 和 Git：
 
 ```sh
-dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.22"
+git clone --branch v0.1.23 https://github.com/Burns1028/dsh-plugin-project-mode.git
+cd dsh-plugin-project-mode
+node scripts/project-mode.mjs setup
+node scripts/project-mode.mjs start
 ```
 
-各版本安装包见 [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases)。
+Setup 会安装锁定版本的 rc.3 运行时，并且只在 `~/.dsh-project-mode/rc3` 内应用三个已审计的扩展。不复用日常 Desktop 应用、`~/.dsh`、全局 Agent 配置和工作区。原生 Web 界面在本地打开；配置模型后新建会话，在发送第一条消息前选择 **Project**。
 
-在 DSH 插件页启用插件，打开工作区，新建会话，并在发送第一条消息前选择 **Project**。
+运行 `node scripts/project-mode.mjs doctor` 可以检查准备结果。[首次运行指南](docs/quickstart.md)说明了路径、重启和恢复方式，也可以直接尝试[可复现的项目任务](docs/demo-workflow.md)。
 
-仓库已包含 Git 安装所需的构建产物。没有自动修改应用的安装钩子，也没有发布到 npm。给本仓库开发依赖打补丁，不会同时修改已安装的 DSH 应用；打包后的 Desktop 需要单独准备兼容运行时。兼容文档说明了显式补丁脚本、版本校验以及备份和恢复方式。
+如果已有准备好的兼容 Desktop／运行时，仍可通过它的原生 CLI 安装插件：
+
+```sh
+dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.23"
+```
+
+原版 rc.3 仍不兼容。Setup 是显式运行的脚本，不是 npm 安装钩子，也不会修改已有的 Desktop 应用。[兼容说明](docs/compatibility.md)保留了三个原生扩展和手工准备方式；各版本安装包见 [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases)。
 
 ## 使用指南
 
@@ -170,7 +176,7 @@ Coordinator 通过 `control_workers` 使用 `spawn`、`list`、`get`、`send`、
 
 分工仍由模型判断，预览版不保证每次都作出理想选择，也不使用任务关键词、命令次数或时间阈值强迫派发。
 
-欢迎用一个小项目试用，并在 [Issues](https://github.com/Burns1028/dsh-plugin-project-mode/issues) 分享使用场景或安装反馈。如果希望持续关注项目，点一个 Star 也能帮助更多人发现它。
+欢迎用一个小项目试用，并在 [试用反馈](https://github.com/Burns1028/dsh-plugin-project-mode/issues/new?template=project-mode-trial.yml) 分享使用场景或安装反馈。如果希望持续关注项目，点一个 Star 也能帮助更多人发现它。
 
 ## 许可证
 

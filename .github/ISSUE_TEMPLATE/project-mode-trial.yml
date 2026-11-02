@@ -1,0 +1,70 @@
+name: Project Mode trial feedback
+description: Help improve the developer preview with a concrete task and its outcome.
+title: "[Trial] "
+labels: ["trial-feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying this unofficial preview. A successful small task is useful feedback too.
+        Please describe what actually happened. Keep API keys, private chat content and credentials out of the report.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Plugin version and DSH version; paste the launcher's doctor summary if available.
+      placeholder: "Project Mode 0.1.23; DSH 0.2.1-rc.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation route
+      options:
+        - Isolated Web runtime (setup script)
+        - Manually prepared compatible runtime
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and Node version
+      placeholder: "macOS arm64, Node 24.x"
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: What project task did you try?
+      description: A small reproducible task or the public example is enough.
+    validations:
+      required: true
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      options:
+        - Installed and completed a project task
+        - Installed but the workflow was blocked
+        - Installation or startup was blocked
+        - Still trying
+    validations:
+      required: true
+  - type: checkboxes
+    id: scenarios
+    attributes:
+      label: What did you exercise?
+      options:
+        - label: Coordinator dispatching or reusing Workers
+        - label: Talking to a Worker directly and returning to Coordinator
+        - label: Full final AI result returning automatically
+        - label: Continuing a later task using shared context
+        - label: Worker capsules, timeline or notes panel
+  - type: textarea
+    id: details
+    attributes:
+      label: What worked, or what blocked you?
+      description: Expected behavior, actual behavior, and minimal reproduction steps. A short redacted error is enough.
+    validations:
+      required: true

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.23 — 2026-11-02
+
+- Add an explicit isolated Web setup, start and read-only doctor CLI with a pinned native runtime lock, audited compatibility backup and recoverable owned setup.
+- Keep the new runtime's DSH home, Agent configuration and default workspace separate from the normal Desktop installation.
+- Add a dependency-free project task, trial feedback form, and first-run documentation for community testing.
+- Publish a 60-second edited real-task recording, independently verified result files and the shared context used by the follow-up task.
+- Project coordination and native execution behavior are unchanged from 0.1.22.
+
 ## 0.1.22 — 2026-11-02
 
 - Remove sticky global error bookkeeping that could poison unrelated Project turns after a recovered background failure. Current Project assignments, native activity and canonical result delivery still govern closure.

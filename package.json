@@ -11,7 +11,8 @@
     "typecheck": "tsc -p packages/project-mode/tsconfig.json --noEmit && tsc -p packages/project-mode/tsconfig.client.json",
     "build": "node scripts/build.mjs",
     "pretest": "npm run build",
-    "verify:package": "node scripts/verify-package.mjs"
+    "verify:package": "node scripts/verify-package.mjs",
+    "test:launcher": "node --test tests/launcher/*.test.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "~4.0.5",
@@ -112,7 +113,7 @@
   "engines": {
     "node": ">=24.9.0"
   },
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Unofficial Project Mode for DeepSeek Harness: persistent Coordinator, reusable Workers and shared context. Preview; requires patched DSH 0.2.1-rc.3.",
   "keywords": [
     "deepseek",

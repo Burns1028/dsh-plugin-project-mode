@@ -4,13 +4,13 @@ Give a project a persistent Coordinator that manages Workers, maintains project 
 
 English | [简体中文](README.zh.md)
 
-[![Project Mode in DSH: Coordinator, Worker conversations, result capsules and project notes](docs/media/project-workspace.png)](docs/media/project-mode-demo.mp4)
+[![Project Mode actual result: two Workers, a generated note bundle and nine passing tests](docs/media/workflow-result.png)](docs/media/project-workflow.mp4)
 
 **One project, a persistent team.** Delegate work, open any Worker, and keep the next steps in view.
 
-[Watch the 22-second walkthrough](docs/media/project-mode-demo.mp4) · [Explore the screenshots](#see-it-in-action) · [Install](#quick-start)
+[Watch the 60-second workflow](docs/media/project-workflow.mp4) · [Explore the screenshots](#see-it-in-action) · [Install](#quick-start)
 
-**Unofficial developer preview: v0.1.22.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. Stock rc.3 cannot enable the plugin. Read [Compatibility](docs/compatibility.md) before installing.
+**Unofficial developer preview: v0.1.23.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. The isolated setup below prepares these extensions for you; stock rc.3 cannot enable the plugin directly. See [Compatibility](docs/compatibility.md).
 
 ## Contents
 
@@ -41,11 +41,12 @@ Project Mode gives the coordination work of a multi-Agent project to a persisten
 
 ## See it in action
 
-A release review is a useful place to start: one Worker checks release evidence, another reviews documentation, and the Coordinator brings the results together. In this demo it then reuses both Workers for a follow-up and updates `notes.md`.
+A small CLI change makes the handoffs visible: Exporter implements title sorting and tests, Docs maintains the usage guide, and the Coordinator reviews their results. A human changes the ordering inside Exporter's conversation; a later task adds another note using the accepted contract.
 
-[![UI walkthrough: switch project panels, inspect a Worker turn, open its conversation and return with Back](docs/media/project-mode-demo.gif)](docs/media/project-mode-demo.mp4)
+[![Real workflow: dispatch Workers, update one directly, review the result and reuse shared context](docs/media/project-workflow.gif)](docs/media/project-workflow.mp4)
 
-The walkthrough shows navigation after the work has finished: **Workers → notes.md → turn input/output → Worker conversation → Back**. [Open the MP4](docs/media/project-mode-demo.mp4) for playback controls, or [view the workspace screenshot](docs/media/project-workspace.png) at full size.
+The edited recording shows a real CLI task: **dispatch Workers → human changes title sorting inside Exporter → Coordinator catches up → next turn reuses the same Workers and shared context**. Waiting is cut and labeled throughout; it is not a 60-second completion claim. The finished sample passed 9 real tests. [Try the task](docs/demo-workflow.md) or [inspect its actual result](docs/demo-result). [Open the MP4](docs/media/project-workflow.mp4) for playback controls, or [view the workspace screenshot](docs/media/project-workspace.png) at full size.
+[![Actual result: the later task preserves the accepted order and passes nine tests](docs/media/workflow-result.png)](docs/media/workflow-result.png)
 
 ### Follow each Worker's work
 
@@ -59,25 +60,30 @@ Choose a Worker to see its turns from newest to oldest. Expand the original inst
 
 [![Project notes rendered in DSH with the goal, delivered files, current status and follow-up work](docs/media/project-notes.png)](docs/media/project-notes.png)
 
-These are real DSH captures of **Project Atlas**, a fictional demo workspace, using plugin v0.1.22 and the compatible rc.3 runtime. They illustrate the workflow rather than a release-quality or speed benchmark. [Capture details and reuse](docs/media/README.md).
+The workflow video uses the v0.1.23 isolated runtime and the public Note Bundle fixture. The earlier detail screenshots show the fictional **Project Atlas** workspace on v0.1.22. These are real DSH captures, not product mockups or speed benchmarks. [Capture details and reuse](docs/media/README.md).
 
 ## Quick start
 
-1. Prepare DSH **0.2.1-rc.3** with all three explicit extensions in [Compatibility](docs/compatibility.md):
-   - Agent-local `tools.suppress({ deny })` with reversible disposal.
-   - Per-session `conversation.submission.register(sessionId, "steer")`.
-   - `sidebar.workspaces.session.branch` for native parent/child rows.
-2. Install the tagged bundle through that runtime's CLI:
+The easiest first run is a separate **compatible DSH Web environment**. Requires Node **24.9+**, npm and Git:
 
 ```sh
-dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.22"
+git clone --branch v0.1.23 https://github.com/Burns1028/dsh-plugin-project-mode.git
+cd dsh-plugin-project-mode
+node scripts/project-mode.mjs setup
+node scripts/project-mode.mjs start
 ```
 
-Tagged bundles are listed on [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases).
+Setup installs the locked rc.3 runtime and applies exactly the three reviewed extensions inside `~/.dsh-project-mode/rc3`. Your ordinary Desktop app, `~/.dsh`, global Agent configuration and workspaces are not reused. The native Web UI opens locally; configure your model, create a conversation and select **Project** before its first message.
 
-Enable the plugin in DSH's Plugins page, open a workspace, create a conversation and select **Project** before sending the first message.
+Use `node scripts/project-mode.mjs doctor` to check the prepared environment. See the [first-run guide](docs/quickstart.md) for locations, restart and recovery, and try the [reproducible project task](docs/demo-workflow.md).
 
-The repository includes built artifacts for Git installation. There is no automatic application patching or npm publication. Patching this checkout's development dependencies does not patch your installed DSH application; a packaged Desktop needs a separately prepared compatible runtime. The compatibility guide documents the explicit helper, exact-version checks and backup/restore requirements.
+For an already prepared compatible Desktop/runtime, the plugin can still be installed through its native CLI:
+
+```sh
+dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.23"
+```
+
+Stock rc.3 remains incompatible. The setup script is explicit, not an npm installation hook, and does not patch an existing Desktop app. [Compatibility](docs/compatibility.md) documents the three native extensions and manual route; tagged bundles are on [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases).
 
 ## User guide
 
@@ -170,7 +176,7 @@ The Coordinator uses `control_workers` with `spawn`, `list`, `get`, `send`, `his
 
 Delegation remains a model judgment. This preview does not guarantee ideal task ownership on every request, and does not use task keywords or command/time thresholds to force it.
 
-Try Project Mode on a small project and share your workflow or installation feedback in [Issues](https://github.com/Burns1028/dsh-plugin-project-mode/issues). If you would like to follow its development, a star helps others discover it.
+Try Project Mode on a small project and share your workflow or installation feedback in [trial feedback](https://github.com/Burns1028/dsh-plugin-project-mode/issues/new?template=project-mode-trial.yml). If you would like to follow its development, a star helps others discover it.
 
 ## License
 
