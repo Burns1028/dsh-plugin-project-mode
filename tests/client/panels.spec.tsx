@@ -28,7 +28,7 @@ afterEach(async () => {
   localStorage.clear();
   delete (window as any).__ModuleLoader__;
 });
-async function bench() {
+async function bench(inputText?: string) {
   const load = nativeLoader(),
     root = new Context();
   dispose.push(() => root.fiber.dispose());
@@ -105,7 +105,9 @@ async function bench() {
                   {
                     id: "in",
                     time: 1700000000000,
-                    text: `## Input ${workerId}\n\n- **Keep** this input as written.`,
+                    text:
+                      inputText ??
+                      `## Input ${workerId}\n\n- **Keep** this input as written.`,
                     actor: "user",
                   },
                 ],
@@ -163,6 +165,57 @@ const t = (key: keyof typeof en, args?: Record<string, any>) =>
   String(en[key] ?? key).replace(/\{(\w+)\}/g, (_, key) =>
     String(args?.[key] ?? key),
   );
+
+it.each([
+  {
+    kind: "code",
+    text: "```js\nconst first = 1;\nconst last = 2;\n```",
+    preview: "const first = 1; const last = 2;",
+  },
+  {
+    kind: "table",
+    text: "| Item | State |\n| --- | --- |\n| A | First |\n| B | Last |",
+    preview: "Item State A First B Last",
+  },
+])(
+  "previews $kind as text and expands its complete native Markdown",
+  async ({ kind, text, preview }) => {
+    const b = await bench(text);
+    const entry = b.slots
+      .entries("sidebar.right.pane.tab")
+      .find((e: any) => e.options.key === "project-mode-workers")!;
+    const Component = entry.component as any;
+    const signal = new AbortController().signal;
+    render(
+      <Component
+        {...entry.inject?.()}
+        sessionId={sid("parent")}
+        t={t}
+        useTabInfo={() => ({ tab: { visible: true, signal, actions: {} } })}
+      />,
+    );
+    const excerpt = await screen.findByText(preview);
+    const summary = excerpt.closest("summary")!;
+    const disclosure = summary.closest("details")!;
+    expect(disclosure.open).toBe(false);
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("button", { name: en.copy })).toBeNull();
+    fireEvent.click(excerpt);
+    expect(disclosure.open).toBe(true);
+    if (kind === "table") expect(await screen.findByRole("table")).toBeTruthy();
+    else {
+      expect(await screen.findByRole("button", { name: en.copy })).toBeTruthy();
+      expect(summary.querySelector("pre code")?.textContent).toContain(
+        "const last = 2;",
+      );
+    }
+    fireEvent.click(summary);
+    expect(disclosure.open).toBe(false);
+    await screen.findByText(preview);
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("button", { name: en.copy })).toBeNull();
+  },
+);
 
 it("registers a native Workers tab and defaults once to Workers and the native notes preview without reopening closed tabs", async () => {
   const b = await bench();
@@ -222,7 +275,7 @@ it("selects workers inside one native tab, renders per-turn inputs/outputs/artif
     />,
   );
   await screen.findByText("Output child");
-  const inputText = screen.getByRole("heading", { name: "Input child" });
+  const inputText = screen.getByText("Input child Keep this input as written.");
   const outputText = screen.getByText("Output child");
   const inputSummary = inputText.closest("summary")!;
   const outputSummary = outputText.closest("summary")!;
@@ -241,7 +294,9 @@ it("selects workers inside one native tab, renders per-turn inputs/outputs/artif
   fireEvent.click(inputText);
   expect(input.open).toBe(true);
   expect(output.open).toBe(false);
-  expect(screen.getByRole("heading", { name: "Input child" })).toBeTruthy();
+  expect(
+    await screen.findByRole("heading", { name: "Input child" }),
+  ).toBeTruthy();
   fireEvent.click(outputText);
   expect(output.open).toBe(true);
   fireEvent.click(outputText);

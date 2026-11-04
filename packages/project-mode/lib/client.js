@@ -4096,7 +4096,7 @@ window.__ModuleLoader__.load({
 .pm-workers-panel *{box-sizing:border-box}
 .pm-workers-panel-empty{display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}.pm-workers-panel-empty p{margin:0;max-width:28ch}
 .pm-axis-preview{margin-top:4px}.pm-axis-preview>summary{display:block;list-style:none;cursor:pointer}.pm-axis-preview>summary::-webkit-details-marker{display:none}.pm-axis-preview>summary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px;border-radius:3px}
-.pm-axis-preview:not([open])>summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}.pm-axis-preview:not([open])>summary p,.pm-axis-preview:not([open])>summary h1,.pm-axis-preview:not([open])>summary h2,.pm-axis-preview:not([open])>summary h3,.pm-axis-preview:not([open])>summary ul,.pm-axis-preview:not([open])>summary ol,.pm-axis-preview:not([open])>summary pre{margin-block:0}
+.pm-axis-preview:not([open])>summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;color:var(--dsw-alias-label-secondary,#999)}
 .pm-workers-list{padding:12px 7px;border-right:1px solid var(--dsw-alias-border-primary,#8883);overflow:auto;min-width:0}
 .pm-workers-list button{display:flex;align-items:center;gap:8px;width:100%;padding:9px 8px;border:0;border-radius:8px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
 .pm-workers-list button:hover,.pm-workers-list button[aria-pressed=true]{background:var(--dsw-alias-interactive-bg-hover,#8882)}
@@ -4123,13 +4123,16 @@ window.__ModuleLoader__.load({
 			});
 		}
 		function MessagePreview({ text, labels }) {
+			const [expanded, setExpanded] = react.useState(false);
+			const preview = react.useMemo(() => (0, _deepseek_ai_dsh_client_ui_primitives.extractMarkdownPlainText)(text), [text]);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("details", {
 				className: "pm-axis-preview",
-				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("summary", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
+				onToggle: (event) => setExpanded(event.currentTarget.open),
+				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("summary", { children: expanded ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
 					text,
 					labels,
 					variant: "compact"
-				}) })
+				}) : preview })
 			});
 		}
 		function WorkersPanel({ client, open, timeline, sessionId, useTabInfo, t }) {

@@ -130,7 +130,7 @@ The Client contributes native slots and tabs. It does not replace the workspace 
 
 `ProjectStore.turn` derives capsules by `(Coordinator Session, native turn, human-message segment, Worker)`. Spawn, accepted updates and received results establish participation. Passive user input and reads do not. Closed seats use frozen outcomes; deleting membership hides all its seats.
 
-The Workers tab consumes a read-only native activity stream. Its timeline shows original Markdown input and the last AI output of each ended turn. Each message uses a native disclosure with a two-line Markdown preview and overflow ellipsis; clicking the message expands or collapses its full content. Artifact links come from recorded native deliveries/successful file mutations. Opening the tab does not call a model.
+The Workers tab consumes a read-only native activity stream. Its timeline shows original Markdown input and the last AI output of each ended turn. Each message uses a native disclosure with a two-line text preview and overflow ellipsis. DSH's native Markdown extractor supplies the preview without summarizing or clipping the stored source; opening renders the original Markdown, including full tables and code, and closing returns to the text preview. Artifact links come from recorded native deliveries/successful file mutations. Opening the tab does not call a model.
 
 ## Failure handling and remaining maintenance
 

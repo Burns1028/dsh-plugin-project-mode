@@ -4,6 +4,7 @@ import {
   FileTypeIcon,
   MarkdownText,
   StateDot,
+  extractMarkdownPlainText,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type {
   PropsLocale,
@@ -40,10 +41,19 @@ function MessagePreview({
   text,
   labels,
 }: Pick<React.ComponentProps<typeof MarkdownText>, "text" | "labels">) {
+  const [expanded, setExpanded] = React.useState(false);
+  const preview = React.useMemo(() => extractMarkdownPlainText(text), [text]);
   return (
-    <details className="pm-axis-preview">
+    <details
+      className="pm-axis-preview"
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
       <summary>
-        <MarkdownText text={text} labels={labels} variant="compact" />
+        {expanded ? (
+          <MarkdownText text={text} labels={labels} variant="compact" />
+        ) : (
+          preview
+        )}
       </summary>
     </details>
   );
