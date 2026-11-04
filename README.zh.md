@@ -126,7 +126,7 @@ dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-pr
 - 新建会话，在发送第一条消息前选择 **Project**。首次 turn 启动后，Project 身份固定。
 - 在原生工作区侧栏展开 Coordinator，打开其 Workers。每个 Worker 都有稳定的身份图标和当前状态。
 - 点击主会话里的 Worker 胶囊进入子会话。胶囊保留在派发、更新或接收结果所对应的对话段，后续普通回复不会搬动旧胶囊。
-- 右侧默认打开 **Workers** 和 **notes.md**。Workers 按由近到远的顺序展示每轮原始输入、最终 AI 输出和记录的产物；输入、输出默认折叠，点击展开。两个 Tab 都允许关闭。
+- 右侧默认打开 **Workers** 和 **notes.md**。Workers 按由近到远的顺序展示每轮原始输入、最终 AI 输出和记录的产物；每条正文默认显示最多两行 Markdown，超出部分显示省略号，点击正文展开或收起。两个 Tab 都允许关闭。
 - Worker 输入框提供返回 Coordinator 的 **Back**，沿用原生派生权限，不提供独立权限选择器。归档主会话时，其管理的 Workers 一起归档。
 
 原生派生和控制工具仅在 Coordinator 的 Agent 作用域中替换，Workers 与普通会话保留原生工具组合。Stop 保持可用，不会自动停止所有 Workers。

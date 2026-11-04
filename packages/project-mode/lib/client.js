@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
 		let zod = require("zod");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		let react_jsx_runtime = require("react/jsx-runtime");
-		// ../../node_modules/@deepseek-ai/dsh-typert-protocol/lib/types/remote-info.js
+		// ../../../../../node_modules/@deepseek-ai/dsh-typert-protocol/lib/types/remote-info.js
 		/** Lazy assembly of generated Remote definitions using caller-supplied Zod; no runtime imports. */
 		/**
 		* Retain one generated definition per endpoint without constructing parsers or projections.
@@ -3786,7 +3786,7 @@ window.__ModuleLoader__.load({
 				held.clear();
 			};
 		}
-		// ../../node_modules/@deepseek-ai/dsh-util-workspace-path/lib/index.js
+		// ../../../../../node_modules/@deepseek-ai/dsh-util-workspace-path/lib/index.js
 		/**
 		* The `dsh-resource://file/…` address grammar: how a file is named across the
 		* Sidebar and the resource model, built and parsed without touching a
@@ -4095,7 +4095,8 @@ window.__ModuleLoader__.load({
 .pm-workers-panel{display:grid;grid-template-columns:minmax(128px,29%) minmax(0,1fr);height:100%;min-height:0;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
 .pm-workers-panel *{box-sizing:border-box}
 .pm-workers-panel-empty{display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}.pm-workers-panel-empty p{margin:0;max-width:28ch}
-.pm-axis-disclosure>summary{cursor:pointer;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary,#999);padding:4px 0;user-select:none}.pm-axis-disclosure[open]>summary{margin-bottom:6px}.pm-axis-disclosure>summary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px;border-radius:3px}
+.pm-axis-preview{margin-top:4px}.pm-axis-preview>summary{display:block;list-style:none;cursor:pointer}.pm-axis-preview>summary::-webkit-details-marker{display:none}.pm-axis-preview>summary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px;border-radius:3px}
+.pm-axis-preview:not([open])>summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}.pm-axis-preview:not([open])>summary p,.pm-axis-preview:not([open])>summary h1,.pm-axis-preview:not([open])>summary h2,.pm-axis-preview:not([open])>summary h3,.pm-axis-preview:not([open])>summary ul,.pm-axis-preview:not([open])>summary ol,.pm-axis-preview:not([open])>summary pre{margin-block:0}
 .pm-workers-list{padding:12px 7px;border-right:1px solid var(--dsw-alias-border-primary,#8883);overflow:auto;min-width:0}
 .pm-workers-list button{display:flex;align-items:center;gap:8px;width:100%;padding:9px 8px;border:0;border-radius:8px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
 .pm-workers-list button:hover,.pm-workers-list button[aria-pressed=true]{background:var(--dsw-alias-interactive-bg-hover,#8882)}
@@ -4106,7 +4107,7 @@ window.__ModuleLoader__.load({
 .pm-worker-axis button,.pm-worker-axis a{font:inherit;color:var(--dsw-alias-label-link,#80a9ee);cursor:pointer}.pm-worker-axis button{border:0;background:transparent;padding:3px 0;text-align:left}
 .pm-axis-turn{position:relative;border-left:1px solid var(--dsw-alias-border-primary,#8884);padding:0 0 24px 18px;margin-left:4px}.pm-axis-turn:before{content:"";position:absolute;left:-4px;top:5px;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-label-secondary,#999)}
 .pm-axis-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:14px}.pm-axis-head strong{font-weight:600}.pm-axis-head time,.pm-axis-message time{font-size:11px;color:var(--dsw-alias-label-secondary,#999)}.pm-axis-outcome{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary,#999)}
-.pm-axis-section{margin-top:14px}.pm-axis-section h4{font-size:11px;font-weight:500;color:var(--dsw-alias-label-secondary,#999);margin:0 0 6px}.pm-axis-message{overflow-wrap:anywhere;margin:5px 0 12px;line-height:1.65}.pm-axis-input{margin-top:4px}.pm-axis-message p:first-child{margin-top:4px}.pm-axis-files{list-style:none;padding:0;margin:0}.pm-axis-files li{margin:5px 0}.pm-axis-files small{display:block;color:var(--dsw-alias-label-secondary,#999);margin-top:3px;overflow-wrap:anywhere}
+.pm-axis-section{margin-top:14px}.pm-axis-section h4{font-size:11px;font-weight:500;color:var(--dsw-alias-label-secondary,#999);margin:0 0 6px}.pm-axis-message{overflow-wrap:anywhere;margin:5px 0 12px;line-height:1.65}.pm-axis-message p:first-child{margin-top:4px}.pm-axis-files{list-style:none;padding:0;margin:0}.pm-axis-files li{margin:5px 0}.pm-axis-files small{display:block;color:var(--dsw-alias-label-secondary,#999);margin-top:3px;overflow-wrap:anywhere}
 .pm-axis-empty{color:var(--dsw-alias-label-secondary,#999);padding:4px 0;line-height:1.6}.pm-axis-more{margin-left:22px}.pm-axis-error{color:var(--dsw-alias-label-secondary,#999);overflow-wrap:anywhere}
 `;
 		// src/client/worker-timeline.tsx
@@ -4119,6 +4120,16 @@ window.__ModuleLoader__.load({
 					hour: "2-digit",
 					minute: "2-digit"
 				})
+			});
+		}
+		function MessagePreview({ text, labels }) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("details", {
+				className: "pm-axis-preview",
+				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("summary", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
+					text,
+					labels,
+					variant: "compact"
+				}) })
 			});
 		}
 		function WorkersPanel({ client, open, timeline, sessionId, useTabInfo, t }) {
@@ -4265,36 +4276,31 @@ window.__ModuleLoader__.load({
 											})
 										]
 									}),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", {
-										className: "pm-axis-section pm-axis-disclosure",
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("summary", { children: t("timelineInputs") }), turn.inputs.map((message) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
+										className: "pm-axis-section",
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h4", { children: t("timelineInputs") }), turn.inputs.map((message) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 											className: "pm-axis-message",
 											children: [
 												/* @__PURE__ */ (0, react_jsx_runtime.jsx)(Timestamp, { time: message.time }),
 												" ·",
 												" ",
 												t(message.actor === "coordinator" ? "fromCoordinator" : "fromUser"),
-												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-													className: "pm-axis-input",
-													children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
-														text: message.text,
-														labels,
-														variant: "compact"
-													})
+												/* @__PURE__ */ (0, react_jsx_runtime.jsx)(MessagePreview, {
+													text: message.text,
+													labels
 												})
 											]
 										}, message.id))]
 									}),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", {
-										className: "pm-axis-section pm-axis-disclosure",
+									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
+										className: "pm-axis-section",
 										children: [
-											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("summary", { children: t("timelineOutputs") }),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h4", { children: t("timelineOutputs") }),
 											turn.outputs.map((message) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 												className: "pm-axis-message",
-												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(Timestamp, { time: message.time }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
+												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(Timestamp, { time: message.time }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(MessagePreview, {
 													text: message.text,
-													labels,
-													variant: "compact"
+													labels
 												})]
 											}, message.id)),
 											!turn.outputs.length && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {

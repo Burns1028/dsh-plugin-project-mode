@@ -36,6 +36,18 @@ function Timestamp({ time }: { time: number }) {
     </time>
   );
 }
+function MessagePreview({
+  text,
+  labels,
+}: Pick<React.ComponentProps<typeof MarkdownText>, "text" | "labels">) {
+  return (
+    <details className="pm-axis-preview">
+      <summary>
+        <MarkdownText text={text} labels={labels} variant="compact" />
+      </summary>
+    </details>
+  );
+}
 export function WorkersPanel({
   client,
   open,
@@ -206,8 +218,8 @@ export function WorkersPanel({
                 )}
               </span>
             </div>
-            <details className="pm-axis-section pm-axis-disclosure">
-              <summary>{t("timelineInputs")}</summary>
+            <section className="pm-axis-section">
+              <h4>{t("timelineInputs")}</h4>
               {turn.inputs.map((message) => (
                 <div className="pm-axis-message" key={message.id}>
                   <Timestamp time={message.time} /> ·{" "}
@@ -216,26 +228,16 @@ export function WorkersPanel({
                       ? "fromCoordinator"
                       : "fromUser",
                   )}
-                  <div className="pm-axis-input">
-                    <MarkdownText
-                      text={message.text}
-                      labels={labels}
-                      variant="compact"
-                    />
-                  </div>
+                  <MessagePreview text={message.text} labels={labels} />
                 </div>
               ))}
-            </details>
-            <details className="pm-axis-section pm-axis-disclosure">
-              <summary>{t("timelineOutputs")}</summary>
+            </section>
+            <section className="pm-axis-section">
+              <h4>{t("timelineOutputs")}</h4>
               {turn.outputs.map((message) => (
                 <div className="pm-axis-message" key={message.id}>
                   <Timestamp time={message.time} />
-                  <MarkdownText
-                    text={message.text}
-                    labels={labels}
-                    variant="compact"
-                  />
+                  <MessagePreview text={message.text} labels={labels} />
                 </div>
               ))}
               {!turn.outputs.length && (
@@ -243,7 +245,7 @@ export function WorkersPanel({
                   {t(turn.outcome === null ? "awaitingReply" : "emptyReply")}
                 </p>
               )}
-            </details>
+            </section>
             <section className="pm-axis-section">
               <h4>{t("timelineArtifacts")}</h4>
               <ul className="pm-axis-files">

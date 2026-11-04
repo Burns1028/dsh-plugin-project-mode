@@ -9,7 +9,7 @@ Use an isolated temporary workspace and fresh Project. Do not use an existing pe
 5. Verify the Worker final AI message returns in full. No final AI message must still report a completion with an empty body. Coordinator processes results before normal same-turn closure. Stop remains interruptible without cascading into all Workers.
 6. Check capsules at each participating message-segment bottom. Passive replies do not copy or move them; accepted updates and received results create a new seat. Delete a Worker and verify all its capsules and active Project queries disappear.
 7. Check native sidebar title alignment, busy animation and ordinary rows. In a Worker composer, Back is transparent and the independent permission picker is absent. Coordinator and ordinary permission pickers remain.
-8. Check Workers and notes.md native tabs, close/reopen behavior, a single empty state, newest-first timeline, collapsed input/output headings, Markdown on expansion and native artifact opening.
+8. Check Workers and notes.md native tabs, close/reopen behavior, a single empty state and newest-first timeline. Input/output headings stay visible; each original Markdown message shows up to two lines with an ellipsis when longer. Click the message text to expand or collapse it, or focus it and use Enter/Space. Verify native links, copy actions and artifact opening still work.
 9. Restart while results are pending; verify no duplicate result delivery. Archive/restore the Project family without restoring independently archived children.
 
 Record the actual runtime, model, task, visible result and limitations. Passing scripted fixtures alone is not real-model/UI acceptance.

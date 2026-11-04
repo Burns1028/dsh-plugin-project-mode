@@ -126,7 +126,7 @@ These documents persist with the project; they are loaded progressively rather t
 - Select **Project** for a new conversation before its first message. Its Project identity stays fixed after the first turn starts.
 - Expand the Coordinator in the original workspace sidebar to open its Workers. Each has a stable identity icon and current status.
 - Click a Worker capsule in the main conversation to open that child. Capsules stay with the conversation segment where work was dispatched, updated or received; later passive replies do not move them.
-- Use the default **Workers** and **notes.md** tabs on the right. Workers shows a newest-first timeline of original input, final AI output and recorded artifacts. Input/output are collapsed until opened. Both tabs are closable.
+- Use the default **Workers** and **notes.md** tabs on the right. Workers shows a newest-first timeline of original input, final AI output and recorded artifacts. Each message previews up to two Markdown lines, with an ellipsis for overflow; click the message to expand or collapse it. Both tabs are closable.
 - Worker composers provide **Back** to the Coordinator and use native delegated permissions without an independent permission picker. Archiving the Project brings its managed Workers along.
 
 Coordinator delegation/control tools are replaced only in that Agent's scope. Workers and ordinary conversations retain native composition. Native Stop remains available and does not automatically stop every Worker.

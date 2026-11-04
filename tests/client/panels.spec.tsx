@@ -222,17 +222,30 @@ it("selects workers inside one native tab, renders per-turn inputs/outputs/artif
     />,
   );
   await screen.findByText("Output child");
-  const input = screen.getByText("Input child").closest("details")!;
-  const output = screen.getByText("Output child").closest("details")!;
+  const inputText = screen.getByRole("heading", { name: "Input child" });
+  const outputText = screen.getByText("Output child");
+  const inputSummary = inputText.closest("summary")!;
+  const outputSummary = outputText.closest("summary")!;
+  expect(inputSummary).not.toBeNull();
+  expect(outputSummary).not.toBeNull();
+  const input = inputSummary.closest("details")!;
+  const output = outputSummary.closest("details")!;
   expect(input).not.toBeNull();
   expect(output).not.toBeNull();
   expect(input.open).toBe(false);
   expect(output.open).toBe(false);
-  fireEvent.click(input.querySelector("summary")!);
+  expect(screen.getByRole("heading", { name: en.timelineInputs })).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: en.timelineOutputs }),
+  ).toBeTruthy();
+  fireEvent.click(inputText);
   expect(input.open).toBe(true);
+  expect(output.open).toBe(false);
   expect(screen.getByRole("heading", { name: "Input child" })).toBeTruthy();
-  fireEvent.click(output.querySelector("summary")!);
+  fireEvent.click(outputText);
   expect(output.open).toBe(true);
+  fireEvent.click(outputText);
+  expect(output.open).toBe(false);
   expect(screen.getByText("Keep").tagName).toBe("STRONG");
   expect(screen.getByText("report.md")).toBeTruthy();
   fireEvent.click(screen.getByText("report.md"));
