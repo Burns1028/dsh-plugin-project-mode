@@ -107,7 +107,7 @@
   "engines": {
     "node": ">=24.9.0"
   },
-  "description": "Unofficial Project Mode for DeepSeek Harness: persistent Coordinator, reusable Workers and shared context. Preview; requires patched DSH 0.2.1-rc.3.",
+  "description": "Unofficial MoA+ for DeepSeek Harness: persistent Coordinator, reusable Workers and shared context. Preview; requires patched DSH 0.2.1-rc.3.",
   "keywords": [
     "deepseek",
     "deepseek-harness",
@@ -140,10 +140,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Burns1028/dsh-plugin-project-mode.git"
+    "url": "git+https://github.com/Burns1028/moa-plus.git"
   },
-  "homepage": "https://github.com/Burns1028/dsh-plugin-project-mode#readme",
+  "homepage": "https://github.com/Burns1028/moa-plus#readme",
   "bugs": {
-    "url": "https://github.com/Burns1028/dsh-plugin-project-mode/issues"
+    "url": "https://github.com/Burns1028/moa-plus/issues"
   }
 }

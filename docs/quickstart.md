@@ -1,14 +1,16 @@
-# Try Project Mode in an isolated Web runtime
+# Try MoA+ in an isolated Web runtime
 
 This is the recommended first-run route for the unofficial preview. It prepares DSH **0.2.1-rc.3** with the three audited compatibility extensions and the repository-built plugin. It does not modify an installed Desktop app or reuse `~/.dsh`.
+
+MoA+ was previously called Project Mode. The commands below install the published v0.1.23 release, whose UI still says **Project Mode / Project**. The renamed labels are on `main`; package IDs, script names and runtime/data directories stay compatible.
 
 ## Install and start
 
 Requires **Node 24.9+**, npm and Git on your PATH. The first setup downloads the locked native dependencies.
 
 ```sh
-git clone --branch v0.1.23 https://github.com/Burns1028/dsh-plugin-project-mode.git
-cd dsh-plugin-project-mode
+git clone --branch v0.1.23 https://github.com/Burns1028/moa-plus.git
+cd moa-plus
 node scripts/project-mode.mjs setup
 node scripts/project-mode.mjs start
 ```

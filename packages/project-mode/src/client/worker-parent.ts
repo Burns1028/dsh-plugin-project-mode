@@ -52,11 +52,11 @@ export function bindWorkerParents(
         // Native Session opening owns its error state; do not turn a rejected
         // background acquisition into an unhandled rejection or a retry loop.
         void reference.ready.catch((error) =>
-          console.error("Project Mode: parent opening failed", error),
+          console.error("MoA+: parent opening failed", error),
         );
       } catch (error) {
         if (held.get(id) === lease) held.delete(id);
-        console.error("Project Mode: parent acquisition failed", error);
+        console.error("MoA+: parent acquisition failed", error);
       }
     }
   };

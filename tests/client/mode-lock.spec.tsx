@@ -37,7 +37,7 @@ it.each([true, false])(
           t={t as any}
         />,
       );
-      expect(screen.getByText("Project")).toBeTruthy();
+      expect(screen.getByText("MoA+")).toBeTruthy();
       expect(screen.queryByRole("checkbox")).toBeNull();
       expect(screen.getByTitle(en["blocked.session-mode-locked"])).toBeTruthy();
     } finally {

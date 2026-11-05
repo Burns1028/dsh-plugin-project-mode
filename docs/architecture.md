@@ -1,6 +1,8 @@
 # Code architecture and reading guide
 
-Project Mode is a Cordis Host/Client plugin built on DSH's native Agent Loop, Sessions, subagent manager, inboxes, projections, filesystem and workspace registry. The Coordinator is a role assigned to an ordinary native Agent. A Worker is a native continuable child Session, not a second execution engine.
+MoA+ (formerly Project Mode) is a Cordis Host/Client plugin built on DSH's native Agent Loop, Sessions, subagent manager, inboxes, projections, filesystem and workspace registry. The Coordinator is a role assigned to an ordinary native Agent. A Worker is a native continuable child Session, not a second execution engine.
+
+The rename changes the public brand and repository URL. Existing `dsh-plugin-project-mode` package/module IDs, the `project-mode` Cordis entry, `projectMode` Remote methods and stored Project paths remain stable. Internal `Project*` type names refer to the same project model.
 
 For role responsibilities and shared project knowledge, start with [MOA](moa-architecture.md). This guide explains the implementation. The baseline is DSH 0.2.1-rc.3 with the explicit extensions in [compatibility](compatibility.md).
 

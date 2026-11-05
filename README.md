@@ -1,6 +1,8 @@
-# Project Mode for DeepSeek Harness
+# MoA+ for DeepSeek Harness
 
-Give a project a persistent Coordinator that manages Workers, maintains project knowledge and decides how to move the work forward.
+**Make agents work better together.** Give a project a persistent Coordinator that manages Workers, maintains project knowledge and decides how to move the work forward.
+
+Formerly **Project Mode**. The existing `dsh-plugin-project-mode` package, plugin identity and project data paths are retained for compatible upgrades. The new labels are on `main`; the published v0.1.23 release still uses **Project Mode / Project**.
 
 English | [简体中文](README.zh.md)
 
@@ -28,7 +30,7 @@ English | [简体中文](README.zh.md)
 
 ## Core capabilities
 
-Project Mode gives the coordination work of a multi-Agent project to a persistent Coordinator in the main conversation. You set the goal; it chooses Workers, follows their progress, reviews results and keeps project knowledge useful across tasks.
+MoA+ gives the coordination work of a multi-Agent project to a persistent Coordinator in the main conversation. You set the goal; it chooses Workers, follows their progress, reviews results and keeps project knowledge useful across tasks.
 
 | Capability | What it gives you |
 | --- | --- |
@@ -67,8 +69,8 @@ The workflow video uses the v0.1.23 isolated runtime and the public Note Bundle 
 The easiest first run is a separate **compatible DSH Web environment**. Requires Node **24.9+**, npm and Git:
 
 ```sh
-git clone --branch v0.1.23 https://github.com/Burns1028/dsh-plugin-project-mode.git
-cd dsh-plugin-project-mode
+git clone --branch v0.1.23 https://github.com/Burns1028/moa-plus.git
+cd moa-plus
 node scripts/project-mode.mjs setup
 node scripts/project-mode.mjs start
 ```
@@ -80,10 +82,10 @@ Use `node scripts/project-mode.mjs doctor` to check the prepared environment. Se
 For an already prepared compatible Desktop/runtime, the plugin can still be installed through its native CLI:
 
 ```sh
-dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.23"
+dsh plugin --profile desktop add "git+https://github.com/Burns1028/moa-plus.git#v0.1.23"
 ```
 
-Stock rc.3 remains incompatible. The setup script is explicit, not an npm installation hook, and does not patch an existing Desktop app. [Compatibility](docs/compatibility.md) documents the three native extensions and manual route; tagged bundles are on [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases).
+Stock rc.3 remains incompatible. The setup script is explicit, not an npm installation hook, and does not patch an existing Desktop app. [Compatibility](docs/compatibility.md) documents the three native extensions and manual route; tagged bundles are on [Releases](https://github.com/Burns1028/moa-plus/releases).
 
 ## User guide
 
@@ -150,8 +152,8 @@ docs/               Model, architecture, API and verification guides
 Requires Node **24.9+**, npm and Git.
 
 ```sh
-git clone https://github.com/Burns1028/dsh-plugin-project-mode.git
-cd dsh-plugin-project-mode
+git clone https://github.com/Burns1028/moa-plus.git
+cd moa-plus
 npm ci
 node scripts/apply-native-compat.mjs --dry-run
 node scripts/apply-native-compat.mjs --backup "$PWD/.superpowers/native-backup"
@@ -176,7 +178,7 @@ The Coordinator uses `control_workers` with `spawn`, `list`, `get`, `send`, `his
 
 Delegation remains a model judgment. This preview does not guarantee ideal task ownership on every request, and does not use task keywords or command/time thresholds to force it.
 
-Try Project Mode on a small project and share your workflow or installation feedback in [trial feedback](https://github.com/Burns1028/dsh-plugin-project-mode/issues/new?template=project-mode-trial.yml). If you would like to follow its development, a star helps others discover it.
+Try MoA+ on a small project and share your workflow or installation feedback in [trial feedback](https://github.com/Burns1028/moa-plus/issues/new?template=project-mode-trial.yml). If you would like to follow its development, a star helps others discover it.
 
 ## License
 

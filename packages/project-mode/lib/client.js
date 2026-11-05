@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
 		let zod = require("zod");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		let react_jsx_runtime = require("react/jsx-runtime");
-		// ../../../../../node_modules/@deepseek-ai/dsh-typert-protocol/lib/types/remote-info.js
+		// ../../node_modules/@deepseek-ai/dsh-typert-protocol/lib/types/remote-info.js
 		/** Lazy assembly of generated Remote definitions using caller-supplied Zod; no runtime imports. */
 		/**
 		* Retain one generated definition per endpoint without constructing parsers or projections.
@@ -3719,7 +3719,7 @@ window.__ModuleLoader__.load({
 		// src/client/input-policy.ts
 		/** Bind enabled coordinators to the native composer's busy Steer preference. */
 		function bindCoordinatorInputPolicy(client, submission, sessions) {
-			if (typeof submission?.register !== "function") throw new Error("Project Mode requires the native composer submission compatibility API; apply the approved local DSH compatibility patch before enabling the plugin.");
+			if (typeof submission?.register !== "function") throw new Error("MoA+ requires the native composer submission compatibility API; apply the approved local DSH compatibility patch before enabling the plugin.");
 			const installed = /* @__PURE__ */ new Map();
 			const reconcile = () => {
 				const candidates = /* @__PURE__ */ new Set([...sessions.getSnapshot().ids, ...client.store.projects().map((p) => p.project.coordinatorSessionId)]);
@@ -3771,10 +3771,10 @@ window.__ModuleLoader__.load({
 						const reference = sessions.retain(id, { source: "projectModeParent" });
 						if (held.get(id) !== lease) reference.release();
 						else lease.reference = reference;
-						reference.ready.catch((error) => console.error("Project Mode: parent opening failed", error));
+						reference.ready.catch((error) => console.error("MoA+: parent opening failed", error));
 					} catch (error) {
 						if (held.get(id) === lease) held.delete(id);
-						console.error("Project Mode: parent acquisition failed", error);
+						console.error("MoA+: parent acquisition failed", error);
 					}
 				}
 			};
@@ -3786,7 +3786,7 @@ window.__ModuleLoader__.load({
 				held.clear();
 			};
 		}
-		// ../../../../../node_modules/@deepseek-ai/dsh-util-workspace-path/lib/index.js
+		// ../../node_modules/@deepseek-ai/dsh-util-workspace-path/lib/index.js
 		/**
 		* The `dsh-resource://file/…` address grammar: how a file is named across the
 		* Sidebar and the resource model, built and parsed without touching a
@@ -4795,20 +4795,20 @@ window.__ModuleLoader__.load({
 			copy: "Copy",
 			copied: "Copied",
 			footnotes: "Footnotes",
-			project: "Project",
-			enabling: "Updating Project…",
-			loading: "Loading Project…",
+			project: "MoA+",
+			enabling: "Updating MoA+…",
+			loading: "Loading MoA+…",
 			parent: "Back",
 			readonlyPending: "Loading worker ownership…",
 			readonlyUnavailable: "Worker ownership is unavailable. Retry to continue.",
 			readonlyDeleted: "This worker was deleted. Its conversation history is retained.",
-			readonlyDisabled: "Project is disabled. This worker is read-only.",
+			readonlyDisabled: "MoA+ is disabled. This worker is read-only.",
 			"blocked.agent-running": "Wait for the current turn to finish.",
-			"blocked.session-mode-locked": "This conversation keeps Project mode after starting.",
+			"blocked.session-mode-locked": "This conversation keeps MoA+ mode after starting.",
 			"blocked.workers-active": "Workers are still active.",
 			"blocked.results-pending": "Worker results are awaiting review.",
 			"blocked.worker-session": "Workers belong to their coordinator.",
-			"blocked.runtime-unavailable": "Project runtime is unavailable.",
+			"blocked.runtime-unavailable": "MoA+ runtime is unavailable.",
 			error: "Could not complete the action: {message}",
 			working: "Working",
 			starting: "Starting",
@@ -4884,20 +4884,20 @@ window.__ModuleLoader__.load({
 			copy: "复制",
 			copied: "已复制",
 			footnotes: "脚注",
-			project: "Project",
-			enabling: "正在更新 Project…",
-			loading: "正在加载 Project…",
+			project: "MoA+",
+			enabling: "正在更新 MoA+…",
+			loading: "正在加载 MoA+…",
 			parent: "Back",
 			readonlyPending: "正在确认 worker 归属…",
 			readonlyUnavailable: "暂时无法确认 worker 归属，请重试。",
 			readonlyDeleted: "此 worker 已删除，对话历史仍然保留。",
-			readonlyDisabled: "Project 已关闭，此 worker 仅可查看历史。",
+			readonlyDisabled: "MoA+ 已关闭，此 worker 仅可查看历史。",
 			"blocked.agent-running": "请等待当前轮次结束。",
-			"blocked.session-mode-locked": "该会话已启动，将始终保持 Project 模式。",
+			"blocked.session-mode-locked": "该会话已启动，将始终保持 MoA+ 模式。",
 			"blocked.workers-active": "仍有 worker 正在运行。",
 			"blocked.results-pending": "worker 结果尚待处理。",
 			"blocked.worker-session": "worker 由主会话管理。",
-			"blocked.runtime-unavailable": "Project 运行环境暂不可用。",
+			"blocked.runtime-unavailable": "MoA+ 运行环境暂不可用。",
 			error: "操作失败：{message}",
 			working: "正在处理",
 			starting: "正在启动",

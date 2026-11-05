@@ -463,7 +463,7 @@ function setup(paths) {
   if (existing?.status === "ready") {
     initializeProfile(paths);
     inspect(paths);
-    console.log(`Project Mode runtime is ready: ${paths.directory}`);
+    console.log(`MoA+ runtime is ready: ${paths.directory}`);
     return;
   }
   if (!existing && stat(paths.directory) && readdirSync(paths.directory).length)
@@ -559,7 +559,7 @@ function setup(paths) {
     verifyFiles(paths, ready, source);
     verifyNative(paths);
     writeMarker(paths, ready);
-    console.log(`Project Mode runtime is ready: ${paths.directory}`);
+    console.log(`MoA+ runtime is ready: ${paths.directory}`);
     console.log(
       "Run the start command with --dir set to the runtime directory shown above.",
     );
@@ -668,7 +668,7 @@ async function main(argv) {
   if (command === "doctor") {
     inspect(paths);
     console.log(
-      `Project Mode runtime is ready; all three native patches are applied: ${paths.directory}`,
+      `MoA+ runtime is ready; all three native patches are applied: ${paths.directory}`,
     );
   }
   return command === "start" ? start(paths, forwarded) : 0;
@@ -681,7 +681,7 @@ if (
   try {
     process.exitCode = await main(process.argv.slice(2));
   } catch (error) {
-    console.error(`Project Mode: ${error.message}`);
+    console.error(`MoA+: ${error.message}`);
     process.exitCode = 1;
   }
 }
