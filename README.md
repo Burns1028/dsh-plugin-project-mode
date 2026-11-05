@@ -1,8 +1,8 @@
 # MoA+ for DeepSeek Harness
 
-**Make agents work better together.** Give a project a persistent Coordinator that manages Workers, maintains project knowledge and decides how to move the work forward.
+**Make agents work better together.** MoA+ adds coordinated multi-agent collaboration to DeepSeek Harness. Enable **MoA** in a conversation: a Coordinator delegates and guides work, reuses persistent Worker conversations, reviews their results and maintains shared context.
 
-Formerly **Project Mode**. The existing `dsh-plugin-project-mode` package, plugin identity and project data paths are retained for compatible upgrades. The new labels are on `main`; the published v0.1.23 release still uses **Project Mode / Project**.
+Formerly **Project Mode**. The existing `dsh-plugin-project-mode` package, plugin identity and project data paths are retained for compatible upgrades. The current source preview uses **MoA** for the checkbox and fixed session label. Published v0.1.23 and its historical captures still use **Project Mode / Project**.
 
 English | [简体中文](README.zh.md)
 
@@ -12,7 +12,7 @@ English | [简体中文](README.zh.md)
 
 [Watch the 60-second workflow](docs/media/project-workflow.mp4) · [Explore the screenshots](#see-it-in-action) · [Install](#quick-start)
 
-**Unofficial developer preview: v0.1.23.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. The isolated setup below prepares these extensions for you; stock rc.3 cannot enable the plugin directly. See [Compatibility](docs/compatibility.md).
+**Unofficial source preview. Latest published tag: v0.1.23.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. The isolated setup below prepares these extensions for you; stock rc.3 cannot enable the plugin directly. See [Compatibility](docs/compatibility.md).
 
 ## Contents
 
@@ -20,9 +20,9 @@ English | [简体中文](README.zh.md)
 - [See it in action](#see-it-in-action)
 - [Quick start](#quick-start)
 - [User guide](#user-guide)
-- [Project memory](#project-memory)
+- [Shared context](#shared-context)
 - [Features in DSH](#features-in-dsh)
-- [Project structure](#project-structure)
+- [Code structure](#code-structure)
 - [Development](#development)
 - [API and documentation](#api-and-documentation)
 - [Current limits](#current-limits)
@@ -30,16 +30,16 @@ English | [简体中文](README.zh.md)
 
 ## Core capabilities
 
-MoA+ gives the coordination work of a multi-Agent project to a persistent Coordinator in the main conversation. You set the goal; it chooses Workers, follows their progress, reviews results and keeps project knowledge useful across tasks.
+You describe the goal in the main conversation. The Coordinator decides whether to create or reuse Workers, supplies the context they need, chooses steer or queue for follow-ups, reviews returned results and organizes the next steps. Each Worker keeps its own conversation and can continue across tasks. You can also open any Worker and guide it directly.
 
-| Capability | What it gives you |
-| --- | --- |
-| Persistent coordination | One Coordinator conversation owns the project's work records and next steps. |
-| Full Worker control | Create or reuse Workers, steer current work, queue later instructions, inspect status and history, interrupt or delete. |
-| Shared project knowledge | Coordinator and Workers maintain an index and load relevant context progressively. |
-| Automatic result return | Each ended Worker turn returns its full final AI message for Coordinator review. |
-| Direct human participation | Open a Worker, guide it yourself, then return to the Coordinator. |
-| Native DSH execution | Sessions, Agent Loop, tools, permissions, message delivery and Stop stay with DSH. |
+| Capability                 | What it gives you                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Persistent coordination    | One Coordinator conversation owns the project's work records and next steps.                                            |
+| Full Worker control        | Create or reuse Workers, steer current work, queue later instructions, inspect status and history, interrupt or delete. |
+| Shared project knowledge   | Coordinator and Workers maintain an index and load relevant context progressively.                                      |
+| Automatic result return    | Each ended Worker turn returns its full final AI message for Coordinator review.                                        |
+| Direct human participation | Open a Worker, guide it yourself, then return to the Coordinator.                                                       |
+| Native DSH execution       | Sessions, Agent Loop, tools, permissions, message delivery and Stop stay with DSH.                                      |
 
 ## See it in action
 
@@ -66,18 +66,20 @@ The workflow video uses the v0.1.23 isolated runtime and the public Note Bundle 
 
 ## Quick start
 
-The easiest first run is a separate **compatible DSH Web environment**. Requires Node **24.9+**, npm and Git:
+Try the current source preview from `main` in a separate **compatible DSH Web environment**. Requires Node **24.9+**, npm and Git:
 
 ```sh
-git clone --branch v0.1.23 https://github.com/Burns1028/moa-plus.git
+git clone https://github.com/Burns1028/moa-plus.git
 cd moa-plus
-node scripts/project-mode.mjs setup
-node scripts/project-mode.mjs start
+node scripts/moa.mjs setup
+node scripts/moa.mjs start
 ```
 
-Setup installs the locked rc.3 runtime and applies exactly the three reviewed extensions inside `~/.dsh-project-mode/rc3`. Your ordinary Desktop app, `~/.dsh`, global Agent configuration and workspaces are not reused. The native Web UI opens locally; configure your model, create a conversation and select **Project** before its first message.
+Setup installs the locked rc.3 runtime and applies exactly the three reviewed extensions inside `~/.dsh-project-mode/rc3`. Your ordinary Desktop app, `~/.dsh`, global Agent configuration and workspaces are not reused. The native Web UI opens locally; configure your model, create a conversation and select **MoA** before its first message.
 
-Use `node scripts/project-mode.mjs doctor` to check the prepared environment. See the [first-run guide](docs/quickstart.md) for locations, restart and recovery, and try the [reproducible project task](docs/demo-workflow.md).
+An already prepared runtime is reused. To try changed source, use a fresh empty directory with `--dir` on both setup and start, even when the plugin version is unchanged; see the first-run guide below.
+
+Use `node scripts/moa.mjs doctor` to check the prepared environment. See the [first-run guide](docs/quickstart.md) for locations, restart and recovery, and try the [reproducible project task](docs/demo-workflow.md).
 
 For an already prepared compatible Desktop/runtime, the plugin can still be installed through its native CLI:
 
@@ -85,15 +87,15 @@ For an already prepared compatible Desktop/runtime, the plugin can still be inst
 dsh plugin --profile desktop add "git+https://github.com/Burns1028/moa-plus.git#v0.1.23"
 ```
 
-Stock rc.3 remains incompatible. The setup script is explicit, not an npm installation hook, and does not patch an existing Desktop app. [Compatibility](docs/compatibility.md) documents the three native extensions and manual route; tagged bundles are on [Releases](https://github.com/Burns1028/moa-plus/releases).
+The pinned v0.1.23 release uses the previous Project label and `scripts/project-mode.mjs` entry. Stock rc.3 remains incompatible. The setup script is explicit, not an npm installation hook, and does not patch an existing Desktop app. [Compatibility](docs/compatibility.md) documents the three native extensions and manual route; tagged bundles are on [Releases](https://github.com/Burns1028/moa-plus/releases).
 
 ## User guide
 
-| Role | Responsibility |
-| --- | --- |
-| You | Set goals, make decisions and talk to the Coordinator. You can also open a Worker and guide it directly. |
+| Role        | Responsibility                                                                                                                                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You         | Set goals, make decisions and talk to the Coordinator. You can also open a Worker and guide it directly.                                                                                                        |
 | Coordinator | Choose and guide Workers, supply context, review results, maintain work records, organize shared knowledge and report progress. It can handle clarification, synthesis and small self-contained actions itself. |
-| Worker | Carry an assigned investigation or execution through to a result, contribute reusable findings and return a self-contained final AI message. |
+| Worker      | Carry an assigned investigation or execution through to a result, contribute reusable findings and return a self-contained final AI message.                                                                    |
 
 A usual workflow:
 
@@ -105,7 +107,7 @@ A usual workflow:
 
 When you operate a Worker directly, the Coordinator can inspect its current state and read the conversation as needed when you return.
 
-## Project memory
+## Shared context
 
 ```text
 .dsh/project-mode/<project-id>/
@@ -121,23 +123,23 @@ The Coordinator maintains `notes.md` and `archived.md` so it knows where the pro
 
 Both the Coordinator and Workers maintain context. They read `context/context.md` first, then open the files needed for the current task. Workers contribute valuable reusable findings and update the index. The Coordinator primarily organizes, consolidates and prunes that knowledge. Routine progress stays in the work records.
 
-These documents persist with the project; they are loaded progressively rather than copied into every request. [The MOA model](docs/moa-architecture.md) describes these responsibilities in more detail.
+These documents persist with the project; they are loaded progressively rather than copied into every request. [The MoA model](docs/moa-architecture.md) describes these responsibilities in more detail.
 
 ## Features in DSH
 
-- Select **Project** for a new conversation before its first message. Its Project identity stays fixed after the first turn starts.
+- Select **MoA** for a new conversation before its first message. The session keeps MoA enabled after its first turn starts.
 - Expand the Coordinator in the original workspace sidebar to open its Workers. Each has a stable identity icon and current status.
 - Click a Worker capsule in the main conversation to open that child. Capsules stay with the conversation segment where work was dispatched, updated or received; later passive replies do not move them.
 - Use the default **Workers** and **notes.md** tabs on the right. Workers shows a newest-first timeline of original input, final AI output and recorded artifacts. Each message shows up to two lines of text with an ellipsis for overflow; click the message to expand its original Markdown or collapse it. Both tabs are closable.
-- Worker composers provide **Back** to the Coordinator and use native delegated permissions without an independent permission picker. Archiving the Project brings its managed Workers along.
+- Worker composers provide **Back** to the Coordinator and use native delegated permissions without an independent permission picker. Archiving the Coordinator brings its managed Workers along.
 
 Coordinator delegation/control tools are replaced only in that Agent's scope. Workers and ordinary conversations retain native composition. Native Stop remains available and does not automatically stop every Worker.
 
-## Project structure
+## Code structure
 
 ```text
-packages/project-mode/
-├── src/host/       Project lifecycle, Worker operations and result delivery
+packages/moa/
+├── src/host/       MoA lifecycle, Worker operations and result delivery
 ├── src/client/     Sidebar, capsules and project tabs
 ├── src/shared/     Shared types and contracts
 └── lib/            Built plugin artifacts
@@ -160,19 +162,19 @@ node scripts/apply-native-compat.mjs --backup "$PWD/.superpowers/native-backup"
 npm test -- --maxWorkers=1
 ```
 
-`npm test` builds the plugin first. Edit `packages/project-mode/src`; regenerate the committed `lib` artifacts through the build. See [Contributing](CONTRIBUTING.md) for typechecks, native contracts, package consumer verification and the test map.
+`npm test` builds the plugin first. Edit `packages/moa/src`; regenerate the committed `lib` artifacts through the build. See [Contributing](CONTRIBUTING.md) for typechecks, native contracts, package consumer verification and the test map.
 
 ## API and documentation
 
 The Coordinator uses `control_workers` with `spawn`, `list`, `get`, `send`, `history`, `interrupt` and `delete`. `send` distinguishes current-work **steer** from next-turn **queue**. See the tool API for arguments, examples and result semantics.
 
-| Read this | To understand |
-| --- | --- |
-| [MOA model](docs/moa-architecture.md) | Role responsibilities and progressive shared context |
-| [Code architecture](docs/architecture.md) | Modules, functions, data structures and execution paths |
-| [Tool API](docs/tool-api.md) | Worker control, message delivery and history windows |
-| [Compatibility](docs/compatibility.md) | The explicit rc.3 runtime extensions |
-| [Verification](docs/verification.md) / [Manual checks](docs/manual-verification.md) | What was tested and how to check a real application |
+| Read this                                                                           | To understand                                           |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| [MoA model](docs/moa-architecture.md)                                               | Role responsibilities and progressive shared context    |
+| [Code architecture](docs/architecture.md)                                           | Modules, functions, data structures and execution paths |
+| [Tool API](docs/tool-api.md)                                                        | Worker control, message delivery and history windows    |
+| [Compatibility](docs/compatibility.md)                                              | The explicit rc.3 runtime extensions                    |
+| [Verification](docs/verification.md) / [Manual checks](docs/manual-verification.md) | What was tested and how to check a real application     |
 
 ## Current limits
 

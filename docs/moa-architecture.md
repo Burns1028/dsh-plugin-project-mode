@@ -1,6 +1,6 @@
-# MOA：持续负责项目的 Coordinator
+# MoA：持续负责项目的 Coordinator
 
-MOA 的核心是一个持续负责项目的 Coordinator。它维护工作记录和共享知识，控制可持续交流的 Workers，并承担原本由人完成的上下文管理和协调判断。项目持续使用同一个 Coordinator 会话；Agent 的内存驻留、空闲释放和恢复遵循 DSH。
+MoA 的核心是一个持续负责项目的 Coordinator。它维护工作记录和共享知识，控制可持续交流的 Workers，并承担原本由人完成的上下文管理和协调判断。项目持续使用同一个 Coordinator 会话；Agent 的内存驻留、空闲释放和恢复遵循 DSH。
 
 ## 工作记录与可复用知识
 
@@ -23,7 +23,7 @@ Agent 先读 `context/context.md`，了解有哪些信息，再按当前任务�
 1. 新用户消息到达，先 list Workers，了解状态和用户对子会话的直接操作；按需 get 或读取指定窗口的 history。
 2. 读取工作记录和上下文索引，判断已有 Worker 的上下文是否适合继续承担任务，或为新的责任派生 Worker。
 3. 下发完整目标、必要上下文引用、约束和预期结果，再更新 notes.md。
-4. 根据进展作出投递判断：steer 引导当前工作，queue 留待当前 turn 结束后处理；interrupt 停止执行，delete 从 Project 移除 Worker。
+4. 根据进展作出投递判断：steer 引导当前工作，queue 留待当前 turn 结束后处理；interrupt 停止执行，delete 从团队中移除 Worker。
 5. 保持对用户输入的响应。等待时汇报进展并交还控制；Worker 每轮结束自动回传完整最后一条 AI 消息，Coordinator 随后审阅结果和证据。
 6. 对具体缺口继续引导同一 Worker，必要时派生其他 Worker或请用户决定；更新工作记录，整理有复用价值的上下文。相关结果均已处理且无需继续协调时收口。
 
@@ -33,4 +33,4 @@ Agent 先读 `context/context.md`，了解有哪些信息，再按当前任务�
 
 Worker 先读共享索引、按需获取上下文，完成其负责的调查或执行，说明具体阻塞和所需决定。任务产生的可复用知识补入共享上下文和索引；notes.md、archived.md 由 Coordinator 维护。最终 AI 消息自包含说明结果、证据、文件或产物、补充的共享知识和遗留事项，由系统自动回传。
 
-MOA 的目标是让多个 Agent 围绕同一个项目持续工作，由 Coordinator 接管分工、上下文供给、引导、排队、审阅和收口等协调判断。
+MoA 的目标是让多个 Agent 围绕同一个项目持续工作，由 Coordinator 接管分工、上下文供给、引导、排队、审阅和收口等协调判断。
