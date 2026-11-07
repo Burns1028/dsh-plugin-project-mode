@@ -10,7 +10,7 @@
 
 [观看 60 秒协作演示](docs/media/project-workflow.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
 
-**非官方开发预览版：v0.1.23。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，下方的独立环境脚本会准备好这些扩展；原版 rc.3 无法直接启用插件。详见[兼容说明](docs/compatibility.md)。
+**非官方源码预览版，最新已发布标签为 v0.1.23。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，下方的独立环境脚本会准备好这些扩展；原版 rc.3 无法直接启用插件。详见[兼容说明](docs/compatibility.md)。
 
 原 Project Mode。v0.1.23 运行时和演示仍使用 **Project** 标识，原有包名保持兼容。
 
@@ -32,14 +32,14 @@
 
 在当前实现中，用户把目标交给 Coordinator，由它创建或复用 Workers、引导工作、审阅结果并维护共享上下文。下文介绍已经可用的能力，后续协作机制将随着设计和验证继续演进。
 
-| 能力 | 带来的帮助 |
-| --- | --- |
-| 持续协调 | 同一个 Coordinator 会话维护项目工作记录，判断下一步。 |
+| 能力               | 带来的帮助                                                                      |
+| ------------------ | ------------------------------------------------------------------------------- |
+| 持续协调           | 同一个 Coordinator 会话维护项目工作记录，判断下一步。                           |
 | 完整的 Worker 控制 | 派生或复用 Worker、引导当前工作、排队下发后续指令、查看状态与历史、打断或删除。 |
-| 共享项目知识 | Coordinator 与 Workers 共同维护索引，按需渐进加载上下文。 |
-| 自动返回结果 | Worker 每轮结束后自动返回完整的最终 AI 消息，交给 Coordinator 审阅。 |
-| 用户直接参与 | 进入 Worker 直接引导工作，再返回 Coordinator 继续协调。 |
-| DSH 原生执行 | Session、Agent Loop、工具、权限、消息投递和 Stop 均由 DSH 承担。 |
+| 共享项目知识       | Coordinator 与 Workers 共同维护索引，按需渐进加载上下文。                       |
+| 自动返回结果       | Worker 每轮结束后自动返回完整的最终 AI 消息，交给 Coordinator 审阅。            |
+| 用户直接参与       | 进入 Worker 直接引导工作，再返回 Coordinator 继续协调。                         |
+| DSH 原生执行       | Session、Agent Loop、工具、权限、消息投递和 Stop 均由 DSH 承担。                |
 
 ## 实际效果
 
@@ -66,18 +66,20 @@
 
 ## 快速开始
 
-首次试用推荐创建一个独立的**兼容 DSH Web 环境**。需要 Node **24.9+**、npm 和 Git：
+当前源码预览版从 `main` 安装，推荐创建一个独立的**兼容 DSH Web 环境**。需要 Node **24.9+**、npm 和 Git：
 
 ```sh
-git clone --branch v0.1.23 https://github.com/Burns1028/moa-plus.git
+git clone https://github.com/Burns1028/moa-plus.git
 cd moa-plus
-node scripts/project-mode.mjs setup
-node scripts/project-mode.mjs start
+node scripts/moa.mjs setup
+node scripts/moa.mjs start
 ```
 
-Setup 会安装锁定版本的 rc.3 运行时，并且只在 `~/.dsh-project-mode/rc3` 内应用三个已审计的扩展。不复用日常 Desktop 应用、`~/.dsh`、全局 Agent 配置和工作区。原生 Web 界面在本地打开；配置模型后新建会话，在发送第一条消息前选择 **Project**。
+Setup 会安装锁定版本的 rc.3 运行时，并且只在 `~/.dsh-project-mode/rc3` 内应用三个已审计的扩展。不复用日常 Desktop 应用、`~/.dsh`、全局 Agent 配置和工作区。原生 Web 界面在本地打开；配置模型后新建会话，在发送第一条消息前选择 **MoA**。
 
-运行 `node scripts/project-mode.mjs doctor` 可以检查准备结果。[首次运行指南](docs/quickstart.md)说明了路径、重启和恢复方式，也可以直接尝试[可复现的项目任务](docs/demo-workflow.md)。
+已有环境会被复用。测试修改后的源码时，即使插件版本号相同，也要为 setup 和 start 指定同一个全新空目录 `--dir`，具体命令见下方首次运行指南。
+
+运行 `node scripts/moa.mjs doctor` 可以检查准备结果。[首次运行指南](docs/quickstart.md)说明了路径、重启和恢复方式，也可以直接尝试[可复现的项目任务](docs/demo-workflow.md)。
 
 如果已有准备好的兼容 Desktop／运行时，仍可通过它的原生 CLI 安装插件：
 
@@ -85,15 +87,15 @@ Setup 会安装锁定版本的 rc.3 运行时，并且只在 `~/.dsh-project-mod
 dsh plugin --profile desktop add "git+https://github.com/Burns1028/moa-plus.git#v0.1.23"
 ```
 
-原版 rc.3 仍不兼容。Setup 是显式运行的脚本，不是 npm 安装钩子，也不会修改已有的 Desktop 应用。[兼容说明](docs/compatibility.md)保留了三个原生扩展和手工准备方式；各版本安装包见 [Releases](https://github.com/Burns1028/moa-plus/releases)。
+固定版本 v0.1.23 仍使用旧 Project 标签和 `scripts/project-mode.mjs` 入口。原版 rc.3 仍不兼容。Setup 是显式运行的脚本，不是 npm 安装钩子，也不会修改已有的 Desktop 应用。[兼容说明](docs/compatibility.md)保留了三个原生扩展和手工准备方式；各版本安装包见 [Releases](https://github.com/Burns1028/moa-plus/releases)。
 
 ## 使用指南
 
-| 角色 | 职责 |
-| --- | --- |
-| 用户 | 提出目标、作出决定、与 Coordinator 沟通，也可以进入 Worker 会话直接引导工作。 |
+| 角色        | 职责                                                                                                                         |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 用户        | 提出目标、作出决定、与 Coordinator 沟通，也可以进入 Worker 会话直接引导工作。                                                |
 | Coordinator | 选择和引导 Workers、供给上下文、审阅结果、维护工作记录、整理共享知识并汇报进展。澄清、汇总和简单独立操作也可以由它自己完成。 |
-| Worker | 完成分配的调查或执行任务，补充可复用的发现，以一条自包含的最终 AI 消息返回结果。 |
+| Worker      | 完成分配的调查或执行任务，补充可复用的发现，以一条自包含的最终 AI 消息返回结果。                                             |
 
 常见流程：
 
@@ -125,7 +127,7 @@ dsh plugin --profile desktop add "git+https://github.com/Burns1028/moa-plus.git#
 
 ## DSH 界面功能
 
-- 新建会话，在发送第一条消息前选择 **Project**。首次 turn 启动后，Project 身份固定。
+- 新建会话，在发送第一条消息前选择 **MoA**。首次 turn 启动后，该会话保持启用 MoA。
 - 在原生工作区侧栏展开 Coordinator，打开其 Workers。每个 Worker 都有稳定的身份图标和当前状态。
 - 点击主会话里的 Worker 胶囊进入子会话。胶囊保留在派发、更新或接收结果所对应的对话段，后续普通回复不会搬动旧胶囊。
 - 右侧默认打开 **Workers** 和 **notes.md**。Workers 按由近到远的顺序展示每轮原始输入、最终 AI 输出和记录的产物；每条正文默认显示最多两行文字，超出部分显示省略号，点击正文展开完整 Markdown 或收起。两个 Tab 都允许关闭。
@@ -136,7 +138,7 @@ dsh plugin --profile desktop add "git+https://github.com/Burns1028/moa-plus.git#
 ## 项目结构
 
 ```text
-packages/project-mode/
+packages/moa/
 ├── src/host/       项目生命周期、Worker 操作和结果投递
 ├── src/client/     侧栏、胶囊和项目页签
 ├── src/shared/     共享类型与接口契约
@@ -160,7 +162,7 @@ node scripts/apply-native-compat.mjs --backup "$PWD/.superpowers/native-backup"
 npm test -- --maxWorkers=1
 ```
 
-`npm test` 会先构建插件。修改 `packages/project-mode/src`，通过构建重新生成并提交 `lib` 产物。类型检查、原生接口测试、安装包验证和测试地图见[贡献指南](CONTRIBUTING.md)。
+`npm test` 会先构建插件。修改 `packages/moa/src`，通过构建重新生成并提交 `lib` 产物。类型检查、原生接口测试、安装包验证和测试地图见[贡献指南](CONTRIBUTING.md)。
 
 ## API 与文档
 
