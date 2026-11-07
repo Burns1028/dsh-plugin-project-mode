@@ -1,8 +1,6 @@
 # MoA+ for DeepSeek Harness
 
-**Make agents work better together.** MoA+ adds coordinated multi-agent collaboration to DeepSeek Harness. Enable **MoA** in a conversation: a Coordinator delegates and guides work, reuses persistent Worker conversations, reviews their results and maintains shared context.
-
-Formerly **Project Mode**. The existing `dsh-plugin-project-mode` package, plugin identity and project data paths are retained for compatible upgrades. The current source preview uses **MoA** for the checkbox and fixed session label. Published v0.1.23 and its historical captures still use **Project Mode / Project**.
+**Make agents work better together.** MoA+ is a multi-agent collaboration plugin for DeepSeek Harness. A Coordinator organizes persistent Workers, reviews their results and maintains shared context.
 
 English | [简体中文](README.zh.md)
 
@@ -13,6 +11,8 @@ English | [简体中文](README.zh.md)
 [Watch the 60-second workflow](docs/media/project-workflow.mp4) · [Explore the screenshots](#see-it-in-action) · [Install](#quick-start)
 
 **Unofficial source preview. Latest published tag: v0.1.23.** Requires DSH **0.2.1-rc.3 with the three compatibility extensions documented in this repository**. The isolated setup below prepares these extensions for you; stock rc.3 cannot enable the plugin directly. See [Compatibility](docs/compatibility.md).
+
+MoA+ was previously named Project Mode. The v0.1.23 runtime and demos still use the **Project** label; the original package identity remains compatible.
 
 ## Contents
 

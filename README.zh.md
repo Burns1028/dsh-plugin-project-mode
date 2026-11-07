@@ -1,8 +1,6 @@
 # MoA+ for DeepSeek Harness
 
-**让多个 Agent 更好地协作。** MoA+ 为 DeepSeek Harness 增加由 Coordinator 协调的多 Agent 协作能力。在会话中启用 **MoA**，Coordinator 负责派发和引导工作、复用持久化 Worker 会话、审阅结果，并维护共享上下文。
-
-原 **Project Mode**。为兼容已有安装，继续沿用 `dsh-plugin-project-mode` 包名、插件标识和项目数据路径。当前源码预览版的开关和固定会话标识统一显示 **MoA**。已发布的 v0.1.23 及历史演示仍显示 **Project Mode / Project**。
+**让多个 Agent 更好地协作。** MoA+ 是 DeepSeek Harness 的多 Agent 协作插件，由 Coordinator 组织持久化 Workers，共享上下文并审阅结果。
 
 [English](README.md) | 简体中文
 
@@ -13,6 +11,8 @@
 [观看 60 秒协作演示](docs/media/project-workflow.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
 
 **非官方源码预览版，最新已发布标签为 v0.1.23。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，下方的独立环境脚本会准备好这些扩展；原版 rc.3 无法直接启用插件。详见[兼容说明](docs/compatibility.md)。
+
+原 Project Mode。v0.1.23 运行时和演示仍使用 **Project** 标识，原有包名保持兼容。
 
 ## 目录
 
