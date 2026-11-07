@@ -1,6 +1,6 @@
-# DeepSeek Harness Project Mode
+# MoA+ for DeepSeek Harness
 
-让一个持续负责项目的 Coordinator 管理 Workers、维护项目知识，并判断工作下一步该如何推进。
+**让多个 Agent 更好地协作。** MoA+ 是 DeepSeek Harness 的多 Agent 协作插件，由 Coordinator 组织持久化 Workers，共享上下文并审阅结果。
 
 [English](README.md) | 简体中文
 
@@ -11,6 +11,8 @@
 [观看 60 秒协作演示](docs/media/project-workflow.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
 
 **非官方开发预览版：v0.1.23。** 需要 DSH **0.2.1-rc.3 及本仓库列出的三个兼容扩展**，下方的独立环境脚本会准备好这些扩展；原版 rc.3 无法直接启用插件。详见[兼容说明](docs/compatibility.md)。
+
+原 Project Mode。v0.1.23 运行时和演示仍使用 **Project** 标识，原有包名保持兼容。
 
 ## 目录
 
@@ -28,7 +30,7 @@
 
 ## 核心能力
 
-Project Mode 将多 Agent 项目中的协调工作交给主会话中持续负责项目的 Coordinator。用户提出目标，它选择 Workers、跟进进度、审阅结果，让项目知识在后续任务中继续发挥作用。
+MoA+ 将多 Agent 项目中的协调工作交给主会话中持续负责项目的 Coordinator。用户提出目标，它选择 Workers、跟进进度、审阅结果，让项目知识在后续任务中继续发挥作用。
 
 | 能力 | 带来的帮助 |
 | --- | --- |
@@ -67,8 +69,8 @@ Project Mode 将多 Agent 项目中的协调工作交给主会话中持续负责
 首次试用推荐创建一个独立的**兼容 DSH Web 环境**。需要 Node **24.9+**、npm 和 Git：
 
 ```sh
-git clone --branch v0.1.23 https://github.com/Burns1028/dsh-plugin-project-mode.git
-cd dsh-plugin-project-mode
+git clone --branch v0.1.23 https://github.com/Burns1028/moa-plus.git
+cd moa-plus
 node scripts/project-mode.mjs setup
 node scripts/project-mode.mjs start
 ```
@@ -80,10 +82,10 @@ Setup 会安装锁定版本的 rc.3 运行时，并且只在 `~/.dsh-project-mod
 如果已有准备好的兼容 Desktop／运行时，仍可通过它的原生 CLI 安装插件：
 
 ```sh
-dsh plugin --profile desktop add "git+https://github.com/Burns1028/dsh-plugin-project-mode.git#v0.1.23"
+dsh plugin --profile desktop add "git+https://github.com/Burns1028/moa-plus.git#v0.1.23"
 ```
 
-原版 rc.3 仍不兼容。Setup 是显式运行的脚本，不是 npm 安装钩子，也不会修改已有的 Desktop 应用。[兼容说明](docs/compatibility.md)保留了三个原生扩展和手工准备方式；各版本安装包见 [Releases](https://github.com/Burns1028/dsh-plugin-project-mode/releases)。
+原版 rc.3 仍不兼容。Setup 是显式运行的脚本，不是 npm 安装钩子，也不会修改已有的 Desktop 应用。[兼容说明](docs/compatibility.md)保留了三个原生扩展和手工准备方式；各版本安装包见 [Releases](https://github.com/Burns1028/moa-plus/releases)。
 
 ## 使用指南
 
@@ -150,8 +152,8 @@ docs/               模型、架构、API 和验证文档
 需要 Node **24.9+**、npm 和 Git。
 
 ```sh
-git clone https://github.com/Burns1028/dsh-plugin-project-mode.git
-cd dsh-plugin-project-mode
+git clone https://github.com/Burns1028/moa-plus.git
+cd moa-plus
 npm ci
 node scripts/apply-native-compat.mjs --dry-run
 node scripts/apply-native-compat.mjs --backup "$PWD/.superpowers/native-backup"
@@ -176,7 +178,7 @@ Coordinator 通过 `control_workers` 使用 `spawn`、`list`、`get`、`send`、
 
 分工仍由模型判断，预览版不保证每次都作出理想选择，也不使用任务关键词、命令次数或时间阈值强迫派发。
 
-欢迎用一个小项目试用，并在 [试用反馈](https://github.com/Burns1028/dsh-plugin-project-mode/issues/new?template=project-mode-trial.yml) 分享使用场景或安装反馈。如果希望持续关注项目，点一个 Star 也能帮助更多人发现它。
+欢迎用一个小项目试用，并在 [试用反馈](https://github.com/Burns1028/moa-plus/issues/new?template=project-mode-trial.yml) 分享使用场景或安装反馈。如果希望持续关注项目，点一个 Star 也能帮助更多人发现它。
 
 ## 许可证
 
