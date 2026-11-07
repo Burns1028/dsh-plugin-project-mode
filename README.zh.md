@@ -1,12 +1,12 @@
-# MoA+ for DeepSeek Harness
+# MoA+
 
-**让多个 Agent 更好地协作。** MoA+ 是 DeepSeek Harness 的多 Agent 协作插件，由 Coordinator 组织持久化 Workers，共享上下文并审阅结果。
+**通过多智能体协作，让智能更进一步。** MoA+ 希望构建一个真正的多智能体系统（Mixture of Agents），探索 Agent 之间的相互协作如何把整个系统的智能能力推向下一个台阶。
 
 [English](README.md) | 简体中文
 
 [![Project Mode 实际结果：两个 Worker、生成的笔记和通过的九项测试](docs/media/workflow-result.png)](docs/media/project-workflow.mp4)
 
-**一个项目，一支持续工作的团队。** 派发任务，随时进入 Worker，始终知道下一步。
+当前预览版以非官方 DeepSeek Harness 插件的形式实现，提供 Coordinator、持久化 Worker 会话、共享上下文和结果审阅。这些能力是系统继续演进的起点。
 
 [观看 60 秒协作演示](docs/media/project-workflow.mp4) · [查看界面效果](#实际效果) · [安装使用](#快速开始)
 
@@ -16,7 +16,7 @@
 
 ## 目录
 
-- [核心能力](#核心能力)
+- [当前实现](#当前实现)
 - [实际效果](#实际效果)
 - [快速开始](#快速开始)
 - [使用指南](#使用指南)
@@ -28,9 +28,9 @@
 - [当前限制](#当前限制)
 - [许可证](#许可证)
 
-## 核心能力
+## 当前实现
 
-MoA+ 将多 Agent 项目中的协调工作交给主会话中持续负责项目的 Coordinator。用户提出目标，它选择 Workers、跟进进度、审阅结果，让项目知识在后续任务中继续发挥作用。
+在当前实现中，用户把目标交给 Coordinator，由它创建或复用 Workers、引导工作、审阅结果并维护共享上下文。下文介绍已经可用的能力，后续协作机制将随着设计和验证继续演进。
 
 | 能力 | 带来的帮助 |
 | --- | --- |
@@ -117,11 +117,11 @@ dsh plugin --profile desktop add "git+https://github.com/Burns1028/moa-plus.git#
     └── ...                  其他可复用的项目知识
 ```
 
-`notes.md` 和 `archived.md` 由 Coordinator 维护，让它知道项目进行到了哪里、还有什么需要推进。
+当前实现中的 `notes.md` 和 `archived.md` 由 Coordinator 维护，让它知道项目进行到了哪里、还有什么需要推进。
 
 上下文由 Coordinator 和 Workers 共同维护。Agent 先读 `context/context.md`，再按当前任务需要读取具体文件。Workers 补充有价值、可复用的发现，并更新索引；Coordinator 更多负责整理、合并、删除过时或重复的内容。日常进度保留在工作记录中。
 
-这些文件随项目持续积累，采用渐进式加载，不会在每次请求中全量展开。详细职责见 [MOA 模型](docs/moa-architecture.md)。
+这些文件随项目持续积累，采用渐进式加载，不会在每次请求中全量展开。详细说明见[目标与当前角色职责](docs/moa-architecture.md)。
 
 ## DSH 界面功能
 
@@ -168,7 +168,7 @@ Coordinator 通过 `control_workers` 使用 `spawn`、`list`、`get`、`send`、
 
 | 文档 | 内容 |
 | --- | --- |
-| [MOA 模型](docs/moa-architecture.md) | 角色职责与渐进式共享上下文 |
+| [目标与当前角色](docs/moa-architecture.md) | 系统目标、当前角色职责与渐进式共享上下文 |
 | [代码架构](docs/architecture.md) | 模块、函数、数据结构和执行路径 |
 | [工具 API](docs/tool-api.md) | Worker 控制、消息投递和历史窗口 |
 | [兼容说明](docs/compatibility.md) | rc.3 所需的显式运行时扩展 |
