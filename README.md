@@ -1,12 +1,12 @@
-# MoA+ for DeepSeek Harness
+# MoA+
 
-**Make agents work better together.** MoA+ is a multi-agent collaboration plugin for DeepSeek Harness. A Coordinator organizes persistent Workers, reviews their results and maintains shared context.
+**Advancing intelligence through multi-agent collaboration.** MoA+ aims to build a Mixture of Agents system, exploring how agents working together can take the capabilities of the whole system to the next level.
 
 English | [简体中文](README.zh.md)
 
 [![Project Mode actual result: two Workers, a generated note bundle and nine passing tests](docs/media/workflow-result.png)](docs/media/project-workflow.mp4)
 
-**One project, a persistent team.** Delegate work, open any Worker, and keep the next steps in view.
+The current preview runs as an unofficial DeepSeek Harness plugin, with a Coordinator, persistent Worker conversations, shared context and result review. These are the starting point for the system's development.
 
 [Watch the 60-second workflow](docs/media/project-workflow.mp4) · [Explore the screenshots](#see-it-in-action) · [Install](#quick-start)
 
@@ -16,7 +16,7 @@ MoA+ was previously named Project Mode. The v0.1.23 runtime and demos still use 
 
 ## Contents
 
-- [Core capabilities](#core-capabilities)
+- [Current implementation](#current-implementation)
 - [See it in action](#see-it-in-action)
 - [Quick start](#quick-start)
 - [User guide](#user-guide)
@@ -28,9 +28,9 @@ MoA+ was previously named Project Mode. The v0.1.23 runtime and demos still use 
 - [Current limits](#current-limits)
 - [License](#license)
 
-## Core capabilities
+## Current implementation
 
-You describe the goal in the main conversation. The Coordinator decides whether to create or reuse Workers, supplies the context they need, chooses steer or queue for follow-ups, reviews returned results and organizes the next steps. Each Worker keeps its own conversation and can continue across tasks. You can also open any Worker and guide it directly.
+In the current implementation, you describe a goal to the Coordinator. It creates or reuses Workers, guides their work, reviews results and maintains shared context. The sections below describe the capabilities available today; further collaboration mechanisms will evolve through design and validation.
 
 | Capability                 | What it gives you                                                                                                       |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -119,11 +119,11 @@ When you operate a Worker directly, the Coordinator can inspect its current stat
     └── ...                  Other reusable project knowledge
 ```
 
-The Coordinator maintains `notes.md` and `archived.md` so it knows where the project stands and what needs attention.
+In the current implementation, the Coordinator maintains `notes.md` and `archived.md` so it knows where the project stands and what needs attention.
 
 Both the Coordinator and Workers maintain context. They read `context/context.md` first, then open the files needed for the current task. Workers contribute valuable reusable findings and update the index. The Coordinator primarily organizes, consolidates and prunes that knowledge. Routine progress stays in the work records.
 
-These documents persist with the project; they are loaded progressively rather than copied into every request. [The MoA model](docs/moa-architecture.md) describes these responsibilities in more detail.
+These documents persist with the project; they are loaded progressively rather than copied into every request. See [goals and current role responsibilities](docs/moa-architecture.md) for more detail.
 
 ## Features in DSH
 
@@ -168,13 +168,13 @@ npm test -- --maxWorkers=1
 
 The Coordinator uses `control_workers` with `spawn`, `list`, `get`, `send`, `history`, `interrupt` and `delete`. `send` distinguishes current-work **steer** from next-turn **queue**. See the tool API for arguments, examples and result semantics.
 
-| Read this                                                                           | To understand                                           |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| [MoA model](docs/moa-architecture.md)                                               | Role responsibilities and progressive shared context    |
-| [Code architecture](docs/architecture.md)                                           | Modules, functions, data structures and execution paths |
-| [Tool API](docs/tool-api.md)                                                        | Worker control, message delivery and history windows    |
-| [Compatibility](docs/compatibility.md)                                              | The explicit rc.3 runtime extensions                    |
-| [Verification](docs/verification.md) / [Manual checks](docs/manual-verification.md) | What was tested and how to check a real application     |
+| Read this | To understand |
+| --- | --- |
+| [Goals and current roles](docs/moa-architecture.md) | System goal, current role responsibilities and progressive shared context |
+| [Code architecture](docs/architecture.md) | Modules, functions, data structures and execution paths |
+| [Tool API](docs/tool-api.md) | Worker control, message delivery and history windows |
+| [Compatibility](docs/compatibility.md) | The explicit rc.3 runtime extensions |
+| [Verification](docs/verification.md) / [Manual checks](docs/manual-verification.md) | What was tested and how to check a real application |
 
 ## Current limits
 
